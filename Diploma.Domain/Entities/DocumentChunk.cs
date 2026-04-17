@@ -1,4 +1,4 @@
-namespace Diploma.Domain;
+namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Represents a text chunk stored in vector database

@@ -8,12 +8,18 @@
 
     <ItemGroup>
       <Folder Include="AI\" />
-      <Folder Include="Parsers\" />
       <Folder Include="Persistence\" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\Diploma.Domain\Diploma.Domain.csproj" />
+      <ProjectReference Include="..\Diploma.Application\Diploma.Application.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
+      <PackageReference Include="PdfPig" Version="0.1.14" />
     </ItemGroup>
 
 </Project>

@@ -10,5 +10,6 @@ public enum DocumentType
     Pdf,
     Docx,
     Markdown,
-    Html
+    Html,
+    LaTeX
 }

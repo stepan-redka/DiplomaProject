@@ -1,7 +1,22 @@
+using Diploma.Application.Interfaces;
+using Diploma.Infrastructure.Parsers;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Register Document Parsers
+builder.Services.AddScoped<IDocumentParser, PdfDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, DocxDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, TextDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, MarkdownDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, HtmlDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, LatexDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, FallbackTextParser>();
+
+// Register Document Parsing Orchestrator
+builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
 
 var app = builder.Build();
 
