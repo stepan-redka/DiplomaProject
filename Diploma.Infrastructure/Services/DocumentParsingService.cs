@@ -2,12 +2,13 @@ using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
-namespace Diploma.Infrastructure.Parsers;
+namespace Diploma.Infrastructure.Services;
 
 public class DocumentParsingService : IDocumentParsingService
 {
     private readonly IEnumerable<IDocumentParser> _parsers;
     private readonly ILogger<DocumentParsingService> _logger;
+    //orchestration service that selects the appropriate parser based on file type and handles fallback logic
 
     public DocumentParsingService(IEnumerable<IDocumentParser> parsers, ILogger<DocumentParsingService> logger)
     {
