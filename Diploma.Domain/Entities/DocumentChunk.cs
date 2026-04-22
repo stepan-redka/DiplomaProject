@@ -1,9 +1,11 @@
+using Diploma.Domain.Interfaces;
+
 namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Represents a text chunk stored in vector database
 /// </summary>
-public class DocumentChunk
+public class DocumentChunk : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     

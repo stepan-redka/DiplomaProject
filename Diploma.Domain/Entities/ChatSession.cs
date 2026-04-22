@@ -1,9 +1,12 @@
+using Diploma.Domain.Enums;
+using Diploma.Domain.Interfaces;
+
 namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Represents a chat session for a user
 /// </summary>
-public class ChatSession
+public class ChatSession : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     

@@ -483,3 +483,4 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 Diploma.Web/appsettings.Development.json
+info.txt

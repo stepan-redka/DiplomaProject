@@ -1,11 +1,12 @@
 using Diploma.Domain.Enums;
+using Diploma.Domain.Interfaces;
 
 namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Represents a document uploaded and processed by the system
 /// </summary>
-public class Document
+public class Document : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     

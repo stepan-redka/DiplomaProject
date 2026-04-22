@@ -66,3 +66,12 @@ public class StoredChunkInfo
     public string ContentPreview { get; set; } = "";
     public int ChunkIndex { get; set; }
 }
+
+public class ScoredChunkDto
+{
+    public Guid ChunkId { get; set; }
+    public Guid DocumentId { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public float Score { get; set; }
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
