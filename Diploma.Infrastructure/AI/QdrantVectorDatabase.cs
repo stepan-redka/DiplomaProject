@@ -81,7 +81,7 @@ public class QdrantVectorDatabase : IVectorDatabase
 
         return results.Select(r => new ScoredChunkDto
         {
-            ChunkId = r.Id.Guid,
+            ChunkId = Guid.Parse(r.Id.Uuid),
             DocumentId = Guid.TryParse(r.Payload["document_id"].StringValue, out var docId) ? docId : Guid.Empty,
             Content = r.Payload["content"].StringValue,
             Score = r.Score,
