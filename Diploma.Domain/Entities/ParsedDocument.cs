@@ -1,11 +1,11 @@
 using Diploma.Domain.Enums;
-
+using Diploma.Domain.Interfaces;
 namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Result of document parsing
 /// </summary>
-public class ParsedDocument
+public class ParsedDocument : IMultiTenant
 {
     public bool Success { get; set; }
     public string? UserId { get; set; }
