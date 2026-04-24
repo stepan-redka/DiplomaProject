@@ -484,3 +484,5 @@ $RECYCLE.BIN/
 *.swp
 Diploma.Web/appsettings.Development.json
 info.txt
+GEMINI.md
+.geminiignore
