@@ -1,3 +1,4 @@
+using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -7,9 +8,12 @@ namespace Diploma.Infrastructure.Persistence;
 
 public class ApplicationDbContext : IdentityDbContext
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    private readonly ICurrentUserService _currentUserService;
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, ICurrentUserService currentUserService)
         : base(options)
     {
+        _currentUserService = currentUserService;
     }
 
     public DbSet<Document> Documents { get; set; } = null!;
@@ -32,6 +36,8 @@ public class ApplicationDbContext : IdentityDbContext
                   .WithOne(c => c.Document)
                   .HasForeignKey(c => c.DocumentId)
                   .OnDelete(DeleteBehavior.Cascade);
+            
+            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
         });
 
         // --- DocumentChunk Configuration ---
@@ -40,6 +46,8 @@ public class ApplicationDbContext : IdentityDbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).IsRequired();
             entity.HasIndex(e => e.UserId);
+
+            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
         });
 
         // --- ChatSession Configuration ---
@@ -53,6 +61,8 @@ public class ApplicationDbContext : IdentityDbContext
                   .WithOne(m => m.Session)
                   .HasForeignKey(m => m.ChatSessionId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
         });
 
         // --- ChatMessage Configuration ---
@@ -61,5 +71,17 @@ public class ApplicationDbContext : IdentityDbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Role).IsRequired();
         });
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<IMultiTenant>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.UserId = _currentUserService.UserId;
+            }
+        }
+        return base.SaveChangesAsync(cancellationToken);
     }
 }
