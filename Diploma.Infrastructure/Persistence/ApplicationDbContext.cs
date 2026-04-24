@@ -80,7 +80,8 @@ public class ApplicationDbContext : IdentityDbContext
         {
             if (entry.State == EntityState.Added)
             {
-                entry.Entity.UserId = _currentUserService.UserId;
+                entry.Entity.UserId = _currentUserService.UserId
+                    ?? throw new InvalidOperationException("Current user ID is required for multi-tenant entities.");
             }
         }
         return base.SaveChangesAsync(cancellationToken);
