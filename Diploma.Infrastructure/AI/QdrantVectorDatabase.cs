@@ -55,7 +55,7 @@ public class QdrantVectorDatabase : IVectorDatabase
             {
                 foreach (var meta in sourceData.Metadata)
                 {
-                    point.Payload[meta.Key] = meta.Value.ToString();
+                    point.Payload[meta.Key] = meta.Value?.ToString() ?? string.Empty;
                 }
             }
         }
