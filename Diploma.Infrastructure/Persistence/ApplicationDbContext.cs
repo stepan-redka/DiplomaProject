@@ -70,7 +70,12 @@ public class ApplicationDbContext : IdentityDbContext
         builder.Entity<ChatMessage>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).IsRequired();
+            entity.HasIndex(e => e.UserId);
             entity.Property(e => e.Role).IsRequired();
+
+            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
+            
         });
     }
 

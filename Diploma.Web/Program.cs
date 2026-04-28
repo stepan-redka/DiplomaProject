@@ -47,6 +47,9 @@ builder.Services.AddScoped<IVectorDatabase, QdrantVectorDatabase>();
 // Register Document Parsing Orchestrator
 builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

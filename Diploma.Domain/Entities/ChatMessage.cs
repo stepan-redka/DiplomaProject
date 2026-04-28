@@ -1,11 +1,18 @@
+using Diploma.Domain.Interfaces;
+
 namespace Diploma.Domain.Entities;
 
 /// <summary>
 /// Individual message within a chat session
 /// </summary>
-public class ChatMessage
+public class ChatMessage : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    
+    /// <summary>
+    /// Foreign key for multi-tenancy isolation
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
     
     /// <summary>
     /// Foreign key to parent session
