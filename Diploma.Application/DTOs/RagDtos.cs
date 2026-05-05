@@ -75,3 +75,14 @@ public class ScoredChunkDto
     public float Score { get; set; }
     public Dictionary<string, object> Metadata { get; set; } = new();
 }
+
+/// <summary>
+/// DTO for displaying document information in the UI
+/// </summary>
+public class DocumentDto
+{
+    public Guid Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public int ChunkCount { get; set; }
+}

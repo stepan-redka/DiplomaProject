@@ -11,6 +11,7 @@ public interface IRagService
     Task<QueryResponse> QueryAsync(string question, int topK = 3);
     Task<bool> EnsureCollectionExistsAsync();
     Task<int> GetDocumentCountAsync();
+    Task<List<DocumentDto>> GetUserDocumentsAsync();
     Task<bool> ClearCollectionAsync();
     Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500);
     Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds);
