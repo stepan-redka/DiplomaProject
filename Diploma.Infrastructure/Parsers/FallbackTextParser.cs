@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
@@ -27,12 +28,16 @@ public class FallbackTextParser : IDocumentParser
 
     public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
     {
+        _logger.LogWarning("Using fallback text parser for file: {FileName}. Content might be malformed if it's a binary format.", fileName);
+        var sw = Stopwatch.StartNew();
         try
         {
-            _logger.LogWarning("Using fallback text parser for file: {FileName}. Content might be malformed if it's a binary format.", fileName);
-            
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
             var content = await reader.ReadToEndAsync();
+
+            sw.Stop();
+            _logger.LogInformation("Successfully parsed file {FileName} using fallback in {ElapsedMs}ms. Length: {Length}", 
+                fileName, sw.ElapsedMilliseconds, content.Length);
 
             return new ParsedDocument
             {
@@ -44,7 +49,8 @@ public class FallbackTextParser : IDocumentParser
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fallback parser failed for file: {FileName}", fileName);
+            sw.Stop();
+            _logger.LogError(ex, "Fallback parser failed for file: {FileName} after {ElapsedMs}ms", fileName, sw.ElapsedMilliseconds);
             
             return new ParsedDocument
             {

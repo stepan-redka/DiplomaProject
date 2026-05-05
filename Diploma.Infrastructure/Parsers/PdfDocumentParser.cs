@@ -4,12 +4,12 @@ using Diploma.Domain.Entities;
 using Diploma.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using UglyToad.PdfPig;
+using System.Diagnostics;
 
 namespace Diploma.Infrastructure.Parsers;
 
 public class PdfDocumentParser : IDocumentParser
 {
-    //wire the logger to log warnings and errors during parsing
     private readonly ILogger<PdfDocumentParser> _logger;
 
     public PdfDocumentParser(ILogger<PdfDocumentParser> logger)
@@ -26,6 +26,8 @@ public class PdfDocumentParser : IDocumentParser
 
     public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
     {
+        _logger.LogInformation("Parsing PDF document: {FileName}", fileName);
+        var sw = Stopwatch.StartNew();
         var textBuilder = new StringBuilder();
 
         try
@@ -53,17 +55,23 @@ public class PdfDocumentParser : IDocumentParser
                 textBuilder.AppendLine(page.Text);
             }
 
+            sw.Stop();
+            var content = textBuilder.ToString().Trim();
+            _logger.LogInformation("Successfully parsed PDF {FileName} in {ElapsedMs}ms. Length: {Length} characters, Pages: {PageCount}", 
+                fileName, sw.ElapsedMilliseconds, content.Length, document.NumberOfPages);
+
             return new ParsedDocument
             {
                 Success = true,
-                Content = textBuilder.ToString().Trim(),
+                Content = content,
                 FileName = fileName,
                 Type = DocumentType.Pdf
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to parse PDF: {FileName}", fileName);
+            sw.Stop();
+            _logger.LogError(ex, "Failed to parse PDF: {FileName} after {ElapsedMs}ms", fileName, sw.ElapsedMilliseconds);
 
             return new ParsedDocument
             {
@@ -90,16 +98,18 @@ public class PdfDocumentParser : IDocumentParser
             .StartsWith("%PDF");
     }
 
-    private static async Task<ParsedDocument> ParseAsFallbackText(Stream stream, string fileName)
+    private async Task<ParsedDocument> ParseAsFallbackText(Stream stream, string fileName)
     {
         stream.Position = 0;
+        _logger.LogInformation("Attempting fallback text parsing for {FileName}", fileName);
 
         using var reader = new StreamReader(stream, Encoding.UTF8);
+        var content = await reader.ReadToEndAsync();
 
         return new ParsedDocument
         {
             Success = true,
-            Content = await reader.ReadToEndAsync(),
+            Content = content,
             FileName = fileName,
             Type = DocumentType.PlainText
         };

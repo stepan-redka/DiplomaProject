@@ -31,12 +31,14 @@ public class DocxDocumentParser : IDocumentParser
             using var memoryStream = new MemoryStream();
             await fileStream.CopyToAsync(memoryStream);
             memoryStream.Position = 0;
+            _logger.LogInformation("Parsing DOCX document: {FileName}. Size: {FileSize} bytes", fileName, memoryStream.Length);
 
             using var wordDocument = WordprocessingDocument.Open(memoryStream, false);
             var body = wordDocument.MainDocumentPart?.Document.Body;
             
             if (body == null)
             {
+                _logger.LogWarning("DOCX document has no body: {FileName}", fileName);
                 return new ParsedDocument
                 {
                     Success = true,
