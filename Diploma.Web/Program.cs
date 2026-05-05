@@ -7,6 +7,7 @@ using Diploma.Infrastructure.Persistence;
 using Diploma.Application.DTOs;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,17 @@ builder.Services.AddSingleton<Qdrant.Client.QdrantClient>(sp =>
     return new Qdrant.Client.QdrantClient(config.Qdrant.Host, config.Qdrant.Port);
 });
 
+// Semantic Kernel with Ollama
+builder.Services.AddKernel();
+builder.Services.AddOllamaChatCompletion(
+    modelId: ragConfig.Ollama.ChatModel,
+    endpoint: new Uri(ragConfig.Ollama.Endpoint)
+);
+builder.Services.AddOllamaEmbeddingGenerator(
+    modelId: ragConfig.Ollama.EmbeddingModel,
+    endpoint: new Uri(ragConfig.Ollama.Endpoint)
+);
+
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options => options.SignIn.RequireConfirmedAccount = false)
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -42,7 +54,9 @@ builder.Services.AddScoped<IDocumentParser, LatexDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, FallbackTextParser>();
 
 builder.Services.AddScoped<IVectorDatabase, QdrantVectorDatabase>();
-
+builder.Services.AddScoped<IAiService, AiService>();
+builder.Services.AddScoped<ITextChunkingService, TextChunkingService>();
+builder.Services.AddScoped<IRagService, RagService>();
 
 // Register Document Parsing Orchestrator
 builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
@@ -56,7 +70,7 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    // The default HSTS value is 30 days. 
     app.UseHsts();
 }
 
