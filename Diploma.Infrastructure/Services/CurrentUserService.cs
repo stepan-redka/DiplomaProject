@@ -7,10 +7,12 @@ namespace Diploma.Infrastructure.Services;
 public class CurrentUserService : ICurrentUserService
 {
     public string? UserId { get; }
+    public bool IsAdmin { get; }
 
     public CurrentUserService(IHttpContextAccessor httpContextAccessor)
     {
-        // Extract user ID from JWT claims
-        UserId = httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = httpContextAccessor.HttpContext?.User;
+        UserId = user?.FindFirstValue(ClaimTypes.NameIdentifier);
+        IsAdmin = user?.IsInRole("Admin") ?? false;
     }
 }

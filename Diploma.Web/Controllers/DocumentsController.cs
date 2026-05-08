@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Diploma.Application.Interfaces;
 using Diploma.Application.DTOs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;
 
+[Authorize]
 public class DocumentsController : Controller
 {
     private readonly IRagService _ragService;

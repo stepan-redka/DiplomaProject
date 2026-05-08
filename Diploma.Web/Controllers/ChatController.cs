@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Mvc;
 using Diploma.Application.Interfaces;
 using Diploma.Application.DTOs;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;
 
+[Authorize]
 public class ChatController : Controller
 {
     private readonly ILogger<ChatController> _logger;
@@ -19,9 +21,22 @@ public class ChatController : Controller
     [HttpGet]
     public IActionResult Index()
     {
-        // For MVC, we usually return the view for the chat interface.
-        // If we want a pure API welcome message, Json is fine, but Index usually means UI.
         return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetHistory()
+    {
+        try
+        {
+            var history = await _ragService.GetChatHistoryAsync();
+            return Json(history);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving chat history.");
+            return StatusCode(500, "Unable to load chat history.");
+        }
     }
 
     [HttpPost]

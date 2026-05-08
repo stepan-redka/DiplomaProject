@@ -2,9 +2,12 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Diploma.Web.Models;
 using Diploma.Application.Interfaces;
+using Diploma.Application.DTOs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;
 
+[Authorize]
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
@@ -16,11 +19,21 @@ public class HomeController : Controller
         _logger = logger;
     }
 
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
-        return View();
+        try
+        {
+            var documents = await _ragService.GetUserDocumentsAsync();
+            return View(documents);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading dashboard documents.");
+            return View(new List<DocumentDto>());
+        }
     }
 
+    [AllowAnonymous]
     public IActionResult Privacy()
     {
         return View();

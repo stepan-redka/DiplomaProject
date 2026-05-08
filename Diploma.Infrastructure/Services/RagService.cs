@@ -113,6 +113,24 @@ public class RagService : IRagService
 
         try
         {
+            // 1. Get or Create Session
+            var session = await _dbContext.ChatSessions.FirstOrDefaultAsync();
+            if (session == null)
+            {
+                session = new ChatSession { UserId = userId, Title = "Default Chat" };
+                _dbContext.ChatSessions.Add(session);
+                await _dbContext.SaveChangesAsync();
+            }
+
+            // 2. Save User Message
+            _dbContext.ChatMessages.Add(new ChatMessage
+            {
+                UserId = userId,
+                ChatSessionId = session.Id,
+                Role = "user",
+                Content = question
+            });
+
             var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question);
             var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, topK)).ToList();
 
@@ -123,6 +141,17 @@ public class RagService : IRagService
 
             var answer = await _aiService.GenerateAnswerAsync(prompt);
             
+            // 3. Save AI Message
+            _dbContext.ChatMessages.Add(new ChatMessage
+            {
+                UserId = userId,
+                ChatSessionId = session.Id,
+                Role = "assistant",
+                Content = answer
+            });
+            
+            await _dbContext.SaveChangesAsync();
+
             sw.Stop();
             _logger.LogInformation("Query completed in {ElapsedMs}ms.", sw.ElapsedMilliseconds);
 
@@ -132,7 +161,7 @@ public class RagService : IRagService
                 Sources = results.Select(r => new RetrievedContext 
                 { 
                     Content = r.Content, 
-                    SourceDocument = "Vector DB Chunk", // Ideal place to join with document metadata
+                    SourceDocument = "Vector DB Chunk", 
                     Score = r.Score 
                 }).ToList(),
                 ProcessingTimeMs = sw.ElapsedMilliseconds
@@ -143,6 +172,21 @@ public class RagService : IRagService
             _logger.LogError(ex, "Error during QueryAsync for question: {Question}", question);
             throw;
         }
+    }
+
+    public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50)
+    {
+        return await _dbContext.ChatMessages
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .OrderBy(m => m.CreatedAt) // Return in chronological order
+            .Select(m => new ChatMessageDto
+            {
+                Role = m.Role,
+                Content = m.Content,
+                CreatedAt = m.CreatedAt
+            })
+            .ToListAsync();
     }
 
     public async Task<bool> EnsureCollectionExistsAsync()
