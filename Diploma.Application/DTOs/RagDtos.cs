@@ -86,3 +86,10 @@ public class DocumentDto
     public DateTime CreatedAt { get; set; }
     public int ChunkCount { get; set; }
 }
+
+public class ChatMessageDto
+{
+    public string Role { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}

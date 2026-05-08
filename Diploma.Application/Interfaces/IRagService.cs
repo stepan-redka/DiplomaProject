@@ -15,4 +15,7 @@ public interface IRagService
     Task<bool> ClearCollectionAsync();
     Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500);
     Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds);
+    
+    // Chat History
+    Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50);
 }

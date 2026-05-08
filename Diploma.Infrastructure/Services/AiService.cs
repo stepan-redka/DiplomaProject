@@ -4,7 +4,7 @@ using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
-namespace Diploma.Infrastructure.AI;
+namespace Diploma.Infrastructure.Services;
 
 public class AiService : IAiService
 {

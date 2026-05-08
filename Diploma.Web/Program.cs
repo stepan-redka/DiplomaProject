@@ -1,5 +1,4 @@
 using Diploma.Application.Interfaces;
-using Diploma.Infrastructure.AI;
 using Qdrant.Client;
 using Diploma.Infrastructure.Parsers;
 using Diploma.Infrastructure.Services;
