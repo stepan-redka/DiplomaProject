@@ -1,1 +1,84 @@
-﻿
+@using Diploma.Application.DTOs
+@model IEnumerable<DocumentDto>
+@{
+    ViewData["Title"] = "RAG Dashboard";
+}
+
+<link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+
+<div class="dashboard-container">
+    <!-- Sidebar: Document Management -->
+    <aside class="sidebar">
+        <div class="sidebar-header d-flex justify-content-between align-items-center">
+            <span>RagSystem</span>
+            <form asp-controller="Account" asp-action="Logout" method="post" id="logoutForm" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-link p-0 text-muted" title="Logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-box-arrow-right" viewBox="0 0 16 16">
+                      <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
+                      <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+        
+        <div class="user-info mb-4 px-2">
+            <small class="text-muted d-block">Logged in as:</small>
+            <span class="small fw-bold">@User.Identity?.Name</span>
+        </div>
+
+        <div class="doc-list" id="documentList">
+            <h6 class="text-muted mb-3">Knowledge Base</h6>
+            @if (Model != null && Model.Any())
+            {
+                foreach (var doc in Model)
+                {
+                    <div class="doc-item" title="Uploaded: @doc.CreatedAt">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-truncate">@doc.FileName</span>
+                        </div>
+                        <small class="text-muted">@doc.ChunkCount chunks</small>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-muted small text-center mt-4">No documents uploaded yet.</div>
+            }
+        </div>
+
+        <div class="sidebar-footer mt-auto">
+            <form id="uploadForm" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <label class="upload-btn w-100">
+                    <span>Upload Documents</span>
+                    <input type="file" id="fileInput" name="file" hidden accept=".pdf,.docx,.md,.txt,.html" />
+                </label>
+            </form>
+            <button class="btn btn-link text-danger btn-sm w-100 mt-2" id="clearBtn">Clear Collection</button>
+        </div>
+    </aside>
+
+    <!-- Main: Chat Interface -->
+    <main class="main-content">
+        <div class="chat-window" id="chatWindow">
+            <div class="message message-ai">
+                Hello <strong>@User.Identity?.Name</strong>! I'm your RAG assistant. Upload some documents on the left, and I'll answer questions based on their content.
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" id="chatInput" placeholder="Ask a question about your documents..." autocomplete="off" />
+                <button class="btn-primary" id="sendBtn">Send</button>
+            </div>
+            <div id="loadingIndicator" class="text-center mt-2 d-none">
+                <small class="text-muted">AI is thinking...</small>
+            </div>
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/chat.js" type="module"></script>
+}
