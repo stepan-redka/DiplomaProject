@@ -32,13 +32,13 @@ public class ApplicationDbContext : IdentityDbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.UserId).IsRequired();
             entity.HasIndex(e => e.UserId);
-            
+
             entity.HasMany(d => d.Chunks)
                   .WithOne(c => c.Document)
                   .HasForeignKey(c => c.DocumentId)
                   .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
+
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
         });
 
         // --- DocumentChunk Configuration ---
@@ -48,7 +48,7 @@ public class ApplicationDbContext : IdentityDbContext
             entity.Property(e => e.UserId).IsRequired();
             entity.HasIndex(e => e.UserId);
 
-            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
         });
 
         // --- ChatSession Configuration ---
@@ -63,7 +63,7 @@ public class ApplicationDbContext : IdentityDbContext
                   .HasForeignKey(m => m.ChatSessionId)
                   .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
         });
 
         // --- ChatMessage Configuration ---
@@ -74,8 +74,8 @@ public class ApplicationDbContext : IdentityDbContext
             entity.HasIndex(e => e.UserId);
             entity.Property(e => e.Role).IsRequired();
 
-            entity.HasQueryFilter(e => e.UserId == _currentUserService.UserId);
-            
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
+
         });
     }
 
