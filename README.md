@@ -33,6 +33,31 @@ The platform adheres to the principles of Clean Architecture to ensure strict se
 | **Analytics Engine** | `HealthService` & `RagService` stats | Quantitative monitoring of system performance. |
 | **Export Engine** | `ExportService` (QuestPDF) | Formal reporting and session archival. |
 
+## Technical Specification
+- **Framework:** .NET 8
+- **Vector Database:** Qdrant (Vector Similarity Search)
+- **Relational Database:** PostgreSQL (Metadata and Chat History)
+- **AI Integration:** Semantic Kernel and Microsoft.Extensions.AI
+- **Front-end:** Tailwind CSS and Lucide icons for a modern, high-fidelity UI.
+
+## Quick Start
+To initialize the research environment and launch the application, utilize the provided orchestration tools:
+
+### Using Makefile (Recommended)
+```bash
+# Start infrastructure (PostgreSQL, Qdrant)
+make up
+
+# Run the application
+make run
+```
+
+### Using Shell Script
+```bash
+# Comprehensive build and launch
+./start.sh
+```
+
 ## Data Isolation and Security
 Data security is managed through a multi-tier isolation strategy designed for multi-tenant research environments:
 - **Logical Isolation:** Enforced at the data access layer via Entity Framework Core Global Query Filters.
