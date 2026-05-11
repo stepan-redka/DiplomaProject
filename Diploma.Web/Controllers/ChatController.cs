@@ -69,7 +69,7 @@ public class ChatController : Controller
 
         try
         {
-            var result = await _ragService.QueryAsync(request.Question, request.TopK);
+            var result = await _ragService.QueryAsync(request.Question, request.TopK, request.Intent);
             sw.Stop();
 
             _logger.LogInformation("Query processed successfully in {ElapsedMs}ms", sw.ElapsedMilliseconds);

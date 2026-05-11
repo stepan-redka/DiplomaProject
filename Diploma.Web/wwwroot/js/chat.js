@@ -15,6 +15,7 @@ class RagApp {
         // Tuning and Paste UI
         this.topKRange = document.getElementById('topKRange');
         this.topKValue = document.getElementById('topKValue');
+        this.researchModeToggle = document.getElementById('researchModeToggle');
         this.pasteBtn = document.getElementById('pasteBtn');
         this.savePasteBtn = document.getElementById('savePasteBtn');
         this.cancelPasteBtn = document.getElementById('cancelPasteBtn');
@@ -91,6 +92,8 @@ class RagApp {
         if (!question) return;
 
         const topK = this.topKRange ? parseInt(this.topKRange.value) : 3;
+        const isResearch = this.researchModeToggle ? this.researchModeToggle.checked : true;
+        const intent = isResearch ? 1 : 0; // 1 = Research, 0 = General
 
         this.appendMessage('user', question);
         this.chatInput.value = '';
@@ -100,7 +103,11 @@ class RagApp {
             const response = await fetch('/Chat/Ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: question, topK: topK })
+                body: JSON.stringify({ 
+                    question: question, 
+                    topK: topK,
+                    intent: intent
+                })
             });
 
             if (!response.ok) throw new Error('Failed to communicate with AI service.');

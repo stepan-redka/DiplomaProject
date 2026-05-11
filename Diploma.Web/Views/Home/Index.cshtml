@@ -204,6 +204,15 @@
                     </div>
                     
                     <div class="flex items-center p-2">
+                        <!-- Research Mode Toggle -->
+                        <div class="flex items-center gap-2 px-3 border-r border-zinc-800 mr-2 group/toggle">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="researchModeToggle" class="sr-only peer" checked>
+                                <div class="w-7 h-4 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:bg-white peer-checked:bg-indigo-600"></div>
+                            </label>
+                            <span class="text-[9px] font-bold uppercase tracking-tighter text-zinc-500 peer-checked:text-zinc-300 transition-colors select-none">Research</span>
+                        </div>
+
                         <input type="text" id="chatInput" placeholder="Query the knowledge base..." autocomplete="off" 
                                class="flex-1 bg-transparent border-none text-zinc-100 text-sm px-4 py-3 focus:outline-none focus:ring-0 placeholder:text-zinc-600">
                         <button id="sendBtn" class="p-2 bg-white hover:bg-zinc-200 text-black rounded-lg transition-all disabled:opacity-50 group/btn">
