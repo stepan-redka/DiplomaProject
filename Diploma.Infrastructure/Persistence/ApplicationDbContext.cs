@@ -38,7 +38,7 @@ public class ApplicationDbContext : IdentityDbContext
                   .HasForeignKey(c => c.DocumentId)
                   .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId || e.UserId == "public");
         });
 
         // --- DocumentChunk Configuration ---
@@ -48,7 +48,7 @@ public class ApplicationDbContext : IdentityDbContext
             entity.Property(e => e.UserId).IsRequired();
             entity.HasIndex(e => e.UserId);
 
-            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId);
+            entity.HasQueryFilter(e => _currentUserService.IsAdmin || e.UserId == _currentUserService.UserId || e.UserId == "public");
         });
 
         // --- ChatSession Configuration ---

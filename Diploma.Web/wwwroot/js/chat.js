@@ -20,9 +20,12 @@ class RagApp {
         this.cancelPasteBtn = document.getElementById('cancelPasteBtn');
         this.closePasteBtn = document.getElementById('closePasteBtn');
         this.pasteModal = document.getElementById('pasteModal');
+        this.upsellModal = document.getElementById('upsellModal');
         
         this.initEventListeners();
         this.loadChatHistory();
+        
+        this.messageCount = 0;
     }
 
     initEventListeners() {
@@ -31,8 +34,13 @@ class RagApp {
             if (e.key === 'Enter') this.handleAsk();
         });
 
-        this.fileInput.addEventListener('change', () => this.handleUpload());
-        this.clearBtn.addEventListener('click', () => this.handleClear());
+        if (this.fileInput) {
+            this.fileInput.addEventListener('change', () => this.handleUpload());
+        }
+        
+        if (this.clearBtn) {
+            this.clearBtn.addEventListener('click', () => this.handleClear());
+        }
 
         if (this.topKRange) {
             this.topKRange.addEventListener('input', (e) => {
@@ -41,7 +49,9 @@ class RagApp {
         }
 
         if (this.pasteBtn) {
-            this.pasteBtn.addEventListener('click', () => this.pasteModal.classList.remove('hidden'));
+            this.pasteBtn.addEventListener('click', () => {
+                if (this.pasteModal) this.pasteModal.classList.remove('hidden');
+            });
         }
         
         const closeActions = [this.cancelPasteBtn, this.closePasteBtn];
@@ -57,6 +67,11 @@ class RagApp {
     async loadChatHistory() {
         try {
             const response = await fetch('/Chat/GetHistory');
+            if (response.status === 401) {
+                console.log('Guest mode: Skipping history load.');
+                return;
+            }
+            
             if (response.ok) {
                 const history = await response.json();
                 if (history.length > 0) {
@@ -97,6 +112,14 @@ class RagApp {
                 this.appendSources(data.sources);
             }
 
+            // Identity Upsell: After 3 guest messages, nudge to sign up
+            this.messageCount++;
+            if (!data.isAuthenticated && this.messageCount >= 3) {
+                setTimeout(() => {
+                    this.upsellModal.classList.remove('hidden');
+                }, 2000);
+            }
+
         } catch (error) {
             this.appendMessage('ai', 'Error: ' + error.message);
         } finally {
@@ -123,6 +146,11 @@ class RagApp {
                 headers: { 'RequestVerificationToken': token },
                 body: formData
             });
+
+            if (response.status === 401) {
+                this.upsellModal.classList.remove('hidden');
+                return;
+            }
 
             if (response.ok) {
                 window.location.reload();
@@ -156,6 +184,11 @@ class RagApp {
                 body: JSON.stringify({ content: content, documentName: docName })
             });
 
+            if (response.status === 401) {
+                this.upsellModal.classList.remove('hidden');
+                return;
+            }
+
             if (response.ok) {
                 window.location.reload();
             } else {
@@ -179,6 +212,11 @@ class RagApp {
                 method: 'POST',
                 headers: { 'RequestVerificationToken': token }
             });
+
+            if (response.status === 401) {
+                this.upsellModal.classList.remove('hidden');
+                return;
+            }
 
             if (response.ok) {
                 window.location.reload();

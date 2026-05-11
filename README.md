@@ -6,6 +6,9 @@ RagSystem is a robust Retrieval-Augmented Generation (RAG) platform developed us
 This system was developed as part of a Fourth-Year Diploma project titled: **"Research of approaches and capabilities of a RAG system for processing data of varying volume and types."**
 
 ### Core Research Features
+- **Frictionless Onboarding Model:** Implementation of a "Value-first" access strategy allowing anonymous guest users to interact with the RAG pipeline before formal registration. This minimizes the initial interaction cost and facilitates immediate research engagement.
+- **Guest Session Tracking:** Utilization of ephemeral session-based identifiers (`Guest-UUID`) to maintain stateful multi-tenant isolation for unauthenticated users without persistent database records.
+- **Identity Upsell Framework:** Contextual UI gating for private features (e.g., document uploads, chat history), providing a seamless transition from guest exploration to authenticated research.
 - **Asynchronous Background Ingestion:** Implementation of a high-throughput document processing pipeline using `System.Threading.Channels`. This decouples heavy parsing and indexing tasks from the web request cycle, ensuring high system responsiveness.
 - **Batch Embedding Optimization:** Integration of batch-processing capabilities for high-dimensional vector generation, significantly reducing latency compared to sequential processing.
 - **Scalable Ingestion Logic:** Support for large-scale document processing and manual text streams, enabling research into data volume impact on system performance.
@@ -23,7 +26,8 @@ The platform adheres to the principles of Clean Architecture to ensure strict se
 ### Multi-Tenancy and Data Isolation
 Data security is managed through a strict multi-tenant isolation strategy:
 - **Logical Isolation:** Enforced via Entity Framework Core Global Query Filters.
-- **Physical Isolation:** Vector data is partitioned within Qdrant using payload-based filtering tied to the authenticated User ID.
+- **Guest Isolation:** Anonymous data access is restricted to public records and ephemeral session-linked content.
+- **Physical Isolation:** Vector data is partitioned within Qdrant using payload-based filtering tied to the User ID (Authenticated or Guest).
 - **Automated Metadata Tagging:** An interceptor pattern ensures all incoming data is tagged with the appropriate tenant identifier during the persistence lifecycle.
 
 ## Technical Specification
@@ -31,7 +35,7 @@ Data security is managed through a strict multi-tenant isolation strategy:
 - **Vector Database:** Qdrant (Vector Similarity Search)
 - **Relational Database:** PostgreSQL (Metadata and Chat History)
 - **AI Integration:** Semantic Kernel and Microsoft.Extensions.AI
-- **Front-end:** Bootstrap 5 with asynchronous JavaScript orchestration
+- **Front-end:** Tailwind CSS and Lucide icons for a modern, high-fidelity UI.
 
 ## Validation
 System reliability and architectural mandates are verified through a comprehensive xUnit test suite, including:

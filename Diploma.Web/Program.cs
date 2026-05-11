@@ -64,6 +64,14 @@ builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromHours(1);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
 // --- PERFORMANCE & BACKGROUND PROCESSING ---
 builder.Services.AddSingleton<RecyclableMemoryStreamManager>();
 builder.Services.AddSingleton<IngestionChannel>();
@@ -86,6 +94,8 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseSession();
 
 app.MapControllerRoute(
     name: "default",

@@ -6,19 +6,21 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;
 
-[Authorize]
 public class ChatController : Controller
 {
     private readonly ILogger<ChatController> _logger;
     private readonly IRagService _ragService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ChatController(ILogger<ChatController> logger, IRagService ragService)
+    public ChatController(ILogger<ChatController> logger, IRagService ragService, ICurrentUserService currentUserService)
     {
         _logger = logger;
         _ragService = ragService;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult Index()
     {
         return View();
@@ -27,6 +29,12 @@ public class ChatController : Controller
     [HttpGet]
     public async Task<IActionResult> GetHistory()
     {
+        // History is only for authenticated users (Identity Upsell trigger point)
+        if (!_currentUserService.IsAuthenticated)
+        {
+            return Unauthorized();
+        }
+
         try
         {
             var history = await _ragService.GetChatHistoryAsync();
@@ -40,6 +48,7 @@ public class ChatController : Controller
     }
 
     [HttpPost]
+    [AllowAnonymous]
     public async Task<IActionResult> Ask([FromBody] QueryRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Question))
@@ -49,7 +58,8 @@ public class ChatController : Controller
         }
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Processing RAG query. Length: {CharCount}", request.Question.Length);
+        _logger.LogInformation("Processing RAG query (User: {UserId}). Length: {CharCount}", 
+            _currentUserService.UserId, request.Question.Length);
 
         try
         {
@@ -62,7 +72,8 @@ public class ChatController : Controller
             {
                 answer = result.Answer,
                 sources = result.Sources,
-                latencyMs = sw.ElapsedMilliseconds
+                latencyMs = sw.ElapsedMilliseconds,
+                isAuthenticated = _currentUserService.IsAuthenticated
             });
         }
         catch (Exception ex)

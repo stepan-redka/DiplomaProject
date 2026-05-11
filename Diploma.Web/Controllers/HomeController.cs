@@ -7,22 +7,25 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;
 
-[Authorize]
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IRagService _ragService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public HomeController(ILogger<HomeController> logger, IRagService ragService)
+    public HomeController(ILogger<HomeController> logger, IRagService ragService, ICurrentUserService currentUserService)
     {
         _ragService = ragService;
         _logger = logger;
+        _currentUserService = currentUserService;
     }
 
+    [AllowAnonymous]
     public async Task<IActionResult> Index()
     {
         try
         {
+            // Even guests can see 'public' documents thanks to Global Query Filters
             var documents = await _ragService.GetUserDocumentsAsync();
             return View(documents);
         }
@@ -40,12 +43,13 @@ public class HomeController : Controller
     }
 
     [HttpGet("status")]
+    [AllowAnonymous]
     public async Task<IActionResult> Status()
     {
         try 
         {
             int count = await _ragService.GetDocumentCountAsync();
-            return Content($"You have {count} documents in your collection.");
+            return Content($"Collection contains {count} accessible documents.");
         }
         catch (Exception ex)
         {
