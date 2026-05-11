@@ -25,15 +25,43 @@ public class HomeController : Controller
     {
         try
         {
-            // Even guests can see 'public' documents thanks to Global Query Filters
             var documents = await _ragService.GetUserDocumentsAsync();
-            return View(documents);
+            
+            var viewModel = new DashboardViewModel
+            {
+                Documents = documents,
+                TotalDocuments = documents.Count,
+                TotalChunks = documents.Sum(d => d.ChunkCount),
+                IsAuthenticated = _currentUserService.IsAuthenticated
+            };
+
+            if (_currentUserService.IsAuthenticated)
+            {
+                viewModel.TotalQueries = await _ragService.GetTotalQueriesAsync();
+                var storageBytes = await _ragService.GetStorageUsedAsync();
+                viewModel.StorageUsedFormatted = FormatStorage(storageBytes);
+            }
+
+            return View(viewModel);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading dashboard documents.");
-            return View(new List<DocumentDto>());
+            return View(new DashboardViewModel());
         }
+    }
+
+    private string FormatStorage(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB" };
+        double size = bytes;
+        int unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+        return $"{size:F1} {units[unitIndex]}";
     }
 
     [AllowAnonymous]

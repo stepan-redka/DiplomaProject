@@ -77,7 +77,7 @@ class RagApp {
                 if (history.length > 0) {
                     this.chatWindow.innerHTML = '';
                     history.forEach(msg => {
-                        this.appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content);
+                        this.appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content, null, msg.id, msg.effectiveness);
                     });
                 }
             }
@@ -106,10 +106,10 @@ class RagApp {
             if (!response.ok) throw new Error('Failed to communicate with AI service.');
 
             const data = await response.json();
-            this.appendMessage('ai', data.answer, data.latencyMs);
+            this.appendMessage('ai', data.answer, data.latencyMs, data.messageId);
             
             if (data.sources && data.sources.length > 0) {
-                this.appendSources(data.sources);
+                this.appendSources(data.sources, data.messageId);
             }
 
             // Identity Upsell: After 3 guest messages, nudge to sign up
@@ -124,6 +124,36 @@ class RagApp {
             this.appendMessage('ai', 'Error: ' + error.message);
         } finally {
             this.showLoading(false);
+        }
+    }
+
+    async handleFeedback(messageId, effectiveness) {
+        try {
+            const response = await fetch('/Chat/SetFeedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageId, effectiveness })
+            });
+
+            if (response.ok) {
+                // Visual confirmation
+                const container = document.querySelector(`[data-message-id="${messageId}"]`);
+                if (container) {
+                    const buttons = container.querySelectorAll('.feedback-btn');
+                    buttons.forEach(btn => {
+                        btn.classList.remove('text-emerald-400', 'text-red-400', 'bg-zinc-800');
+                        btn.classList.add('opacity-50');
+                    });
+                    
+                    const activeBtn = container.querySelector(`[data-feedback="${effectiveness}"]`);
+                    if (activeBtn) {
+                        activeBtn.classList.remove('opacity-50');
+                        activeBtn.classList.add(effectiveness === 1 ? 'text-emerald-400' : 'text-red-400', 'bg-zinc-800');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to save feedback:', error);
         }
     }
 
@@ -226,9 +256,10 @@ class RagApp {
         }
     }
 
-    appendMessage(sender, text, latency) {
+    appendMessage(sender, text, latency, messageId, effectiveness = 0) {
         const container = document.createElement('div');
-        container.className = 'max-w-2xl mx-auto flex gap-6 fade-in';
+        container.className = 'max-w-2xl mx-auto flex gap-6 fade-in group';
+        if (messageId) container.setAttribute('data-message-id', messageId);
         
         const iconDiv = document.createElement('div');
         iconDiv.className = `w-8 h-8 rounded shrink-0 flex items-center justify-center border ${sender === 'ai' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-white'}`;
@@ -249,11 +280,36 @@ class RagApp {
         
         contentDiv.appendChild(p);
 
-        if (latency) {
-            const stat = document.createElement('div');
-            stat.className = 'flex items-center gap-2 mt-4';
-            stat.innerHTML = `<span class="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Latency: ${latency}ms</span>`;
-            contentDiv.appendChild(stat);
+        if (sender === 'ai' && messageId) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'flex items-center justify-between mt-4';
+            
+            // Stats
+            const stats = document.createElement('div');
+            stats.className = 'flex items-center gap-4';
+            if (latency) {
+                stats.innerHTML = `<span class="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Latency: ${latency}ms</span>`;
+            }
+            actionsDiv.appendChild(stats);
+
+            // Feedback Loop
+            const feedback = document.createElement('div');
+            feedback.className = 'flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity';
+            
+            const createFeedbackBtn = (type, iconName, value) => {
+                const btn = document.createElement('button');
+                btn.className = `feedback-btn p-1.5 rounded-md hover:bg-zinc-800 transition-colors text-zinc-600 ${effectiveness === value ? (value === 1 ? 'text-emerald-400 bg-zinc-800' : 'text-red-400 bg-zinc-800') : ''}`;
+                btn.setAttribute('data-feedback', value);
+                btn.innerHTML = `<i data-lucide="${iconName}" class="w-3.5 h-3.5"></i>`;
+                btn.onclick = () => this.handleFeedback(messageId, value);
+                return btn;
+            };
+
+            feedback.appendChild(createFeedbackBtn('positive', 'thumbs-up', 1));
+            feedback.appendChild(createFeedbackBtn('negative', 'thumbs-down', 2));
+            actionsDiv.appendChild(feedback);
+
+            contentDiv.appendChild(actionsDiv);
         }
 
         container.appendChild(contentDiv);
@@ -267,27 +323,42 @@ class RagApp {
         this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
     }
 
-    appendSources(sources) {
+    appendSources(sources, messageId) {
         const container = document.createElement('div');
-        container.className = 'max-w-2xl mx-auto pl-14';
+        container.className = 'max-w-2xl mx-auto pl-14 fade-in';
         
-        const inner = document.createElement('div');
-        inner.className = 'p-4 rounded-lg bg-zinc-900/50 border border-zinc-800/50 space-y-2';
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors mb-2';
+        toggleBtn.innerHTML = `<i data-lucide="chevron-down" class="w-3 h-3 transition-transform"></i><span>View Source Transparency</span>`;
         
-        const title = document.createElement('h4');
-        title.className = 'text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2';
-        title.innerText = 'Retrieval Sources';
-        inner.appendChild(title);
-
+        const sourcesDiv = document.createElement('div');
+        sourcesDiv.className = 'hidden p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50 space-y-4';
+        
         sources.forEach(s => {
             const item = document.createElement('div');
-            item.className = 'flex items-center justify-between text-[11px] text-zinc-400';
-            item.innerHTML = `<span>${s.sourceDocument}</span><span class="font-mono text-zinc-600">Score: ${s.score.toFixed(3)}</span>`;
-            inner.appendChild(item);
+            item.className = 'space-y-1.5';
+            item.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-zinc-400 truncate pr-4">${s.sourceDocument}</span>
+                    <span class="text-[9px] font-mono text-zinc-600 shrink-0">Score: ${s.score.toFixed(3)}</span>
+                </div>
+                <p class="text-[11px] text-zinc-500 italic leading-relaxed line-clamp-2">"${s.content}"</p>
+            `;
+            sourcesDiv.appendChild(item);
         });
 
-        container.appendChild(inner);
+        toggleBtn.onclick = () => {
+            const isHidden = sourcesDiv.classList.toggle('hidden');
+            toggleBtn.querySelector('i').classList.toggle('rotate-180', !isHidden);
+        };
+
+        container.appendChild(toggleBtn);
+        container.appendChild(sourcesDiv);
         this.chatWindow.appendChild(container);
+        
+        if (window.lucide) {
+            lucide.createIcons({ root: container });
+        }
         this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
     }
 

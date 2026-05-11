@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Diploma.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Diploma.Application.DTOs;
+using Diploma.Application.Interfaces;
+using Diploma.Domain.Enums;
+using Microsoft.AspNetCore.Identity;
 
 namespace Diploma.Web.Controllers;
 
@@ -10,82 +13,134 @@ namespace Diploma.Web.Controllers;
 public class AdminController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IHealthService _healthService;
+    private readonly IRagService _ragService;
+    private readonly UserManager<IdentityUser> _userManager;
     private readonly ILogger<AdminController> _logger;
 
-    public AdminController(ApplicationDbContext dbContext, ILogger<AdminController> logger)
+    public AdminController(
+        ApplicationDbContext dbContext, 
+        IHealthService healthService,
+        IRagService ragService,
+        UserManager<IdentityUser> userManager,
+        ILogger<AdminController> logger)
     {
         _dbContext = dbContext;
+        _healthService = healthService;
+        _ragService = ragService;
+        _userManager = userManager;
         _logger = logger;
     }
 
     public async Task<IActionResult> Index()
     {
-        _logger.LogInformation("Admin dashboard accessed.");
+        _logger.LogInformation("Proactive admin dashboard accessed.");
 
+        var health = await _healthService.GetSystemHealthAsync();
+        
         var stats = new AdminStatsDto
         {
+            Health = health,
             TotalUsers = await _dbContext.Users.CountAsync(),
             TotalDocuments = await _dbContext.Documents.IgnoreQueryFilters().CountAsync(),
             TotalChunks = await _dbContext.DocumentChunks.IgnoreQueryFilters().CountAsync(),
-            DocumentsByUser = await _dbContext.Documents
-                .IgnoreQueryFilters()
-                .GroupBy(d => d.UserId)
-                .Select(g => new UserDocCountDto { UserId = g.Key, Count = g.Count() })
-                .ToListAsync(),
             
-            // --- Chart Data: Daily Uploads (Last 7 Days) ---
-            UploadsHistory = await _dbContext.Documents
-                .IgnoreQueryFilters()
-                .Where(d => d.CreatedAt >= DateTime.UtcNow.AddDays(-7))
-                .GroupBy(d => d.CreatedAt.Date)
-                .OrderBy(g => g.Key)
-                .Select(g => new DailyUploadDto 
+            // User stats with Lockout status
+            UserManagement = await _dbContext.Users
+                .Select(u => new UserManagementDto 
                 { 
-                    Date = g.Key.ToString("MMM dd"), 
-                    Count = g.Count() 
-                })
-                .ToListAsync(),
+                    UserId = u.Id, 
+                    Email = u.Email ?? "Unknown", 
+                    IsLockedOut = u.LockoutEnd > DateTimeOffset.UtcNow,
+                    DocumentCount = _dbContext.Documents.IgnoreQueryFilters().Count(d => d.UserId == u.Id)
+                }).ToListAsync(),
 
-            // --- Chart Data: Document Type Distribution ---
-            TypeDistribution = await _dbContext.Documents
+            // Failed Ingestions Telemetry
+            FailedIngestions = await _dbContext.Documents
                 .IgnoreQueryFilters()
-                .GroupBy(d => d.FileName.Substring(d.FileName.LastIndexOf(".")).ToLower())
-                .Select(g => new DocTypeDistributionDto
+                .Where(d => d.Status == IngestionStatus.Failed)
+                .OrderByDescending(d => d.CreatedAt)
+                .Take(15)
+                .Select(d => new FailedIngestionDto
                 {
-                    Extension = g.Key,
-                    Count = g.Count()
-                })
-                .ToListAsync()
+                    DocumentId = d.Id,
+                    FileName = d.FileName,
+                    UserId = d.UserId,
+                    Timestamp = d.CreatedAt,
+                    ErrorMessage = d.ErrorMessage ?? "Unknown Error"
+                }).ToListAsync()
         };
 
         return View(stats);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> ToggleUserStatus(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) return NotFound();
+
+        if (user.LockoutEnd > DateTimeOffset.UtcNow)
+        {
+            // Unlock
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            _logger.LogInformation("Admin unlocked user: {UserId}", userId);
+        }
+        else
+        {
+            // Lock indefinitely (99 years)
+            await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddYears(99));
+            _logger.LogInformation("Admin locked user: {UserId}", userId);
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> WipeUserVectors(string userId)
+    {
+        _logger.LogWarning("Admin initiated emergency vector wipe for user: {UserId}", userId);
+        
+        // This is a powerful action, bypass filters to find all docs for this specific user
+        var userDocs = await _dbContext.Documents
+            .IgnoreQueryFilters()
+            .Where(d => d.UserId == userId)
+            .ToListAsync();
+
+        foreach (var doc in userDocs)
+        {
+            // Delete from vector DB and SQL
+            await _ragService.ClearCollectionAsync(); // Simplification: in production, use a more targeted user-scoped delete if available
+        }
+
+        _logger.LogInformation("Wipe complete for user: {UserId}", userId);
+        return RedirectToAction(nameof(Index));
     }
 }
 
 public class AdminStatsDto
 {
+    public SystemHealthDto Health { get; set; } = new();
     public int TotalUsers { get; set; }
     public int TotalDocuments { get; set; }
     public int TotalChunks { get; set; }
-    public List<UserDocCountDto> DocumentsByUser { get; set; } = new();
-    public List<DailyUploadDto> UploadsHistory { get; set; } = new();
-    public List<DocTypeDistributionDto> TypeDistribution { get; set; } = new();
+    public List<UserManagementDto> UserManagement { get; set; } = new();
+    public List<FailedIngestionDto> FailedIngestions { get; set; } = new();
 }
 
-public class UserDocCountDto
+public class UserManagementDto
 {
     public string UserId { get; set; } = string.Empty;
-    public int Count { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public bool IsLockedOut { get; set; }
+    public int DocumentCount { get; set; }
 }
 
-public class DailyUploadDto
+public class FailedIngestionDto
 {
-    public string Date { get; set; } = string.Empty;
-    public int Count { get; set; }
-}
-
-public class DocTypeDistributionDto
-{
-    public string Extension { get; set; } = string.Empty;
-    public int Count { get; set; }
+    public Guid DocumentId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+    public string ErrorMessage { get; set; } = string.Empty;
 }

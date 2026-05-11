@@ -57,6 +57,8 @@ builder.Services.AddScoped<IVectorDatabase, QdrantVectorDatabase>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<ITextChunkingService, TextChunkingService>();
 builder.Services.AddScoped<IRagService, RagService>();
+builder.Services.AddScoped<IExportService, ExportService>();
+builder.Services.AddScoped<IHealthService, HealthService>();
 
 // Register Document Parsing Orchestrator
 builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
