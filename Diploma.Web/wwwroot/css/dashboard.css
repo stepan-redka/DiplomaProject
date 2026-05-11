@@ -166,3 +166,28 @@ input[type="text"]:focus {
     border-color: var(--primary);
     color: var(--primary);
 }
+
+/* Tuning Area */
+.tuning-area {
+    background: rgba(30, 41, 59, 0.4);
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border);
+}
+
+.form-range::-webkit-slider-runnable-track {
+    background: var(--border);
+}
+
+.form-range::-webkit-slider-thumb {
+    background: var(--primary);
+}
+
+.form-range::-moz-range-thumb {
+    background: var(--primary);
+}
+
+.modal-content {
+    background-color: var(--sidebar-bg) !important;
+    border: 1px solid var(--border) !important;
+}
+

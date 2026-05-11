@@ -31,39 +31,83 @@ public class DocumentsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Upload(IFormFile file)
+    public async Task<IActionResult> Upload(List<IFormFile> files)
     {
-        if (file == null || file.Length == 0)
+        if (files == null || files.Count == 0)
         {
-            _logger.LogWarning("No file selected for upload.");
-            return BadRequest("Please select a file to upload.");
+            _logger.LogWarning("No files selected for upload.");
+            return BadRequest("Please select at least one file to upload.");
         }
+
+        int successCount = 0;
+        List<string> errors = new();
+
+        foreach (var file in files)
+        {
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var parsedDoc = await _documentParsingService.ParseDocumentAsync(stream, file.FileName);
+
+                if (string.IsNullOrWhiteSpace(parsedDoc.Content))
+                {
+                    errors.Add($"{file.FileName}: Document contains no readable text.");
+                    continue;
+                }
+
+                var response = await _ragService.IngestDocumentAsync(parsedDoc.Content, file.FileName);
+
+                if (response.Success)
+                {
+                    successCount++;
+                }
+                else
+                {
+                    errors.Add($"{file.FileName}: {response.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing upload for {FileName}", file.FileName);
+                errors.Add($"{file.FileName}: Internal error.");
+            }
+        }
+
+        if (errors.Any())
+        {
+            var message = $"Processed {successCount} files. Errors: {string.Join(" | ", errors)}";
+            return successCount > 0 ? Ok(message) : BadRequest(message);
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PasteText([FromBody] IngestRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Content))
+        {
+            return BadRequest("Content cannot be empty.");
+        }
+
+        var docName = string.IsNullOrWhiteSpace(request.DocumentName) 
+            ? $"Manual_Entry_{DateTime.Now:yyyyMMdd_HHmm}" 
+            : request.DocumentName;
 
         try
         {
-            using var stream = file.OpenReadStream();
-            var parsedDoc = await _documentParsingService.ParseDocumentAsync(stream, file.FileName);
-
-            if (string.IsNullOrWhiteSpace(parsedDoc.Content))
-            {
-                _logger.LogWarning("Document contains no readable text: {FileName}", file.FileName);
-                return BadRequest("The document contains no readable text.");
-            }
-
-            var response = await _ragService.IngestDocumentAsync(parsedDoc.Content, file.FileName);
-
+            var response = await _ragService.IngestDocumentAsync(request.Content, docName);
             if (response.Success)
             {
-                _logger.LogInformation("Successfully ingested document: {FileName}", file.FileName);
-                return RedirectToAction(nameof(Index));
+                return Ok(new { message = "Text indexed successfully", chunks = response.ChunksCreated });
             }
-
             return StatusCode(500, $"Indexing failed: {response.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing upload for {FileName}", file.FileName);
-            return StatusCode(500, "An error occurred while processing the file.");
+            _logger.LogError(ex, "Error processing pasted text.");
+            return StatusCode(500, "An error occurred while processing the text.");
         }
     }
 

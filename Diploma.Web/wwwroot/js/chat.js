@@ -13,6 +13,13 @@ class RagApp {
         this.clearBtn = document.getElementById('clearBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         
+        // New Tuning and Paste UI
+        this.topKRange = document.getElementById('topKRange');
+        this.topKValue = document.getElementById('topKValue');
+        this.pasteBtn = document.getElementById('pasteBtn');
+        this.savePasteBtn = document.getElementById('savePasteBtn');
+        this.pasteModal = new bootstrap.Modal(document.getElementById('pasteModal'));
+        
         this.initEventListeners();
         this.loadChatHistory();
     }
@@ -24,11 +31,26 @@ class RagApp {
             if (e.key === 'Enter') this.handleAsk();
         });
 
-        // Handle file upload
+        // Handle file upload (Batch)
         this.fileInput.addEventListener('change', () => this.handleUpload());
 
         // Handle collection clearing
         this.clearBtn.addEventListener('click', () => this.handleClear());
+
+        // Top-K Slider
+        if (this.topKRange) {
+            this.topKRange.addEventListener('input', (e) => {
+                this.topKValue.innerText = e.target.value;
+            });
+        }
+
+        // Paste Text
+        if (this.pasteBtn) {
+            this.pasteBtn.addEventListener('click', () => this.pasteModal.show());
+        }
+        if (this.savePasteBtn) {
+            this.savePasteBtn.addEventListener('click', () => this.handlePaste());
+        }
     }
 
     /**
@@ -59,6 +81,8 @@ class RagApp {
         const question = this.chatInput.value.trim();
         if (!question) return;
 
+        const topK = this.topKRange ? parseInt(this.topKRange.value) : 3;
+
         this.appendMessage('user', question);
         this.chatInput.value = '';
         this.showLoading(true);
@@ -69,7 +93,10 @@ class RagApp {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ 
+                    question: question,
+                    topK: topK
+                })
             });
 
             if (!response.ok) throw new Error('Failed to communicate with AI service.');
@@ -92,17 +119,19 @@ class RagApp {
      * Handles file upload to DocumentsController/Upload.
      */
     async handleUpload() {
-        const file = this.fileInput.files[0];
-        if (!file) return;
+        const files = this.fileInput.files;
+        if (!files || files.length === 0) return;
 
         const formData = new FormData();
-        formData.append('file', file);
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
         
         // Anti-Forgery Token
         const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
         const token = tokenElement ? tokenElement.value : '';
         
-        this.appendMessage('ai', `Uploading and indexing ${file.name}...`);
+        this.appendMessage('ai', `Uploading and indexing ${files.length} file(s)...`);
 
         try {
             const response = await fetch('/Documents/Upload', {
@@ -121,6 +150,52 @@ class RagApp {
             }
         } catch (error) {
             this.appendMessage('ai', 'Network error during upload.');
+        }
+    }
+
+    /**
+     * Handles manual text paste.
+     */
+    async handlePaste() {
+        const content = document.getElementById('manualContent').value.trim();
+        const docName = document.getElementById('manualDocName').value.trim();
+
+        if (!content) {
+            alert('Please enter some text.');
+            return;
+        }
+
+        const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
+        const token = tokenElement ? tokenElement.value : '';
+
+        this.savePasteBtn.disabled = true;
+        this.savePasteBtn.innerText = 'Indexing...';
+
+        try {
+            const response = await fetch('/Documents/PasteText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({
+                    content: content,
+                    documentName: docName
+                })
+            });
+
+            if (response.ok) {
+                this.pasteModal.hide();
+                window.location.reload();
+            } else {
+                const error = await response.text();
+                alert('Failed to index text: ' + error);
+            }
+        } catch (error) {
+            alert('Network error during indexing.');
+        } finally {
+            this.savePasteBtn.disabled = false;
+            this.savePasteBtn.innerText = 'Save & Index';
         }
     }
 
