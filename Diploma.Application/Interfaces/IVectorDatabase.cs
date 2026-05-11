@@ -28,6 +28,11 @@ public interface IVectorDatabase
     /// Deletes all vectors associated with a specific document for a user.
     /// </summary>
     Task DeleteDocumentVectorsAsync(string collectionName, Guid documentId, string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes all vectors for a specific user.
+    /// </summary>
+    Task DeleteUserVectorsAsync(string collectionName, string userId, CancellationToken ct = default);
 }
 
 public record VectorData(Guid ChunkId, Guid DocumentId, float[] Embedding, string Content, Dictionary<string, object>? Metadata = null);

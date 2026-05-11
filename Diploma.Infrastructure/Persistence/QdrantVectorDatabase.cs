@@ -188,4 +188,28 @@ public class QdrantVectorDatabase : IVectorDatabase
             throw;
         }
     }
+
+    public async Task DeleteUserVectorsAsync(string collectionName, string userId, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        var filter = new Filter
+        {
+            Must = { Conditions.MatchKeyword("user_id", userId) }
+        };
+
+        try
+        {
+            await _client.DeleteAsync(collectionName, filter, cancellationToken: ct);
+            sw.Stop();
+            _logger.LogInformation("Deleted all vectors for user {UserId} in {ElapsedMs}ms", 
+                userId, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "Failed to delete vectors for user {UserId} after {ElapsedMs}ms", 
+                userId, sw.ElapsedMilliseconds);
+            throw;
+        }
+    }
 }
