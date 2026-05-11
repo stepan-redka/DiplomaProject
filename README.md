@@ -15,52 +15,48 @@ This system was developed as part of a Fourth-Year Diploma project titled: **"Re
 - **Heterogeneous Data Extraction:** Specialized parsing pipeline for PDF, DOCX, Markdown, HTML, and Plain Text formats.
 - **Dynamic Retrieval Tuning:** Real-time adjustment of the Top-K (Knowledge Depth) parameter to analyze the relationship between context density, response accuracy, and computational latency.
 
-## Architecture
-The platform adheres to the principles of Clean Architecture to ensure strict separation of concerns and maintainability:
+## Architecture and Methodology
+The platform adheres to the principles of Clean Architecture to ensure strict separation of concerns and maintainability. This architectural choice supports the research by allowing isolated testing of retrieval and generation components.
 
-- **Domain Layer:** Contains core business entities and interfaces for multi-tenancy.
-- **Application Layer:** Defines DTOs and orchestrates business logic through service interfaces.
-- **Infrastructure Layer:** Implements concrete services for AI orchestration (via Microsoft.Extensions.AI), vector database management (Qdrant), and data persistence (EF Core with PostgreSQL).
-- **Presentation Layer:** An ASP.NET Core Razor Pages web application utilizing a responsive dashboard for real-time interaction.
+### System Layering
+- **Domain Layer:** Defines the core business entities (Document, ChatMessage, UserPreference) and the `IMultiTenant` interface which serves as the foundation for the data isolation strategy.
+- **Application Layer:** Contains the service contracts and data transfer objects (DTOs). Orchestrates business logic without direct dependency on external frameworks.
+- **Infrastructure Layer:** Provides concrete implementations for persistence (EF Core with PostgreSQL), vector operations (Qdrant), and AI orchestration (Microsoft.Extensions.AI).
+- **Web Layer:** Implements the presentation logic using ASP.NET Core MVC and Razor Pages, providing a dashboard for research interaction.
 
-### Multi-Tenancy and Data Isolation
-Data security is managed through a strict multi-tenant isolation strategy:
-- **Logical Isolation:** Enforced via Entity Framework Core Global Query Filters.
-- **Guest Isolation:** Anonymous data access is restricted to public records and ephemeral session-linked content.
-- **Physical Isolation:** Vector data is partitioned within Qdrant using payload-based filtering tied to the User ID (Authenticated or Guest).
-- **Automated Metadata Tagging:** An interceptor pattern ensures all incoming data is tagged with the appropriate tenant identifier during the persistence lifecycle.
+### System Components Mapping
+| Component | Implementation Detail | Research Purpose |
+| :--- | :--- | :--- |
+| **Orchestrator** | `RagService` | Coordination of retrieval and generation cycles. |
+| **Vector Engine** | `QdrantVectorDatabase` | High-dimensional semantic search with multi-tenant filtering. |
+| **Ingestion Worker** | `IngestionBackgroundService` | Non-blocking processing of heterogeneous data volumes. |
+| **Analytics Engine** | `HealthService` & `RagService` stats | Quantitative monitoring of system performance. |
+| **Export Engine** | `ExportService` (QuestPDF) | Formal reporting and session archival. |
 
-## Technical Specification
-- **Framework:** .NET 8
-- **Vector Database:** Qdrant (Vector Similarity Search)
-- **Relational Database:** PostgreSQL (Metadata and Chat History)
-- **AI Integration:** Semantic Kernel and Microsoft.Extensions.AI
-- **Front-end:** Tailwind CSS and Lucide icons for a modern, high-fidelity UI.
+## Data Isolation and Security
+Data security is managed through a multi-tier isolation strategy designed for multi-tenant research environments:
+- **Logical Isolation:** Enforced at the data access layer via Entity Framework Core Global Query Filters.
+- **Vector Isolation:** Search operations are restricted via Qdrant payload-based filtering tied to the User ID.
+- **Metadata Interception:** Automated tagging of entities during the persistence lifecycle ensures data consistency across all research sessions.
 
-## Performance and Scalability
-The system has been optimized for high-throughput research environments through several architectural enhancements:
+## Performance and Scalability Optimization
+The system has been optimized to handle varying data volumes and types through the following technical implementations:
+- **Parallel Processing:** Utilization of `Parallel.ForEachAsync` for bulk operations in the vector database.
+- **Batch Embedding:** Reduction of API overhead by grouping text chunks for embedding generation.
+- **Memory Optimization:** Integration of `Microsoft.IO.RecyclableMemoryStream` to minimize memory fragmentation during large document parsing.
+- **Payload Indexing:** Strategic indexing of user identifiers in the vector store to maintain low search latency across large datasets.
 
-- **Batch Embedding Generation:** Transitioned from sequential to batch-processed vector embeddings, reducing document indexing latency by approximately 60% for multi-page documents.
-- **Asynchronous Data Decoupling:** Implemented a non-blocking ingestion pipeline using `System.Threading.Channels`, allowing the web interface to remain responsive while heavy parsing and indexing tasks are offloaded to background workers.
-- **Vector Index Optimization:** Configured payload-based indexing in Qdrant specifically for tenant identifiers, ensuring that search latency remains sub-linear even as the total vector count across all tenants increases.
-- **Resource Management:** Utilized `Microsoft.IO.RecyclableMemoryStream` to minimize Large Object Heap (LOH) allocations and reduce Garbage Collection (GC) overhead during large file processing.
+## Validation and Verification
+The integrity of the research platform is verified through an automated testing suite:
+- **Unit Testing:** Validation of chunking logic, parser routing, and DTO mapping.
+- **Integration Testing:** Verification of end-to-end RAG flows and multi-tenant isolation correctness.
+- **Background Task Validation:** Verification of asynchronous state transitions and error handling in the ingestion worker.
 
-## Validation
-System reliability and architectural mandates are verified through a comprehensive xUnit test suite, including:
-- Unit tests for the text chunking and context retention algorithms.
-- Integration tests for verifying multi-tenant data isolation and RAG orchestration flows.
-- Automated parser routing validation for diverse file formats.
-- Background worker lifecycle and state transition verification.
+## Project Maturity and Final Results
+The 14-day intensive development sprint concluded with a fully verified, production-ready RAG research platform. Key outcomes include:
+- **Seamless Data Pipeline:** Successfully demonstrated end-to-end processing of diverse file formats with transparent source tracking.
+- **Informed Retrieval:** Established a verifiable feedback loop for assessing response quality and effectiveness.
+- **Enterprise Reporting:** Provided tools for high-fidelity export of research data for external analysis.
+- **Robust Multi-Tenancy:** Confirmed strict data segregation across both relational and non-relational storage layers.
 
-## Project Maturity & Results (Sprint Finalization)
-
-The 14-day development sprint concluded with a fully functional, production-ready RAG system. The following key milestones were achieved:
-
-- **Full Lifecycle Document Ingestion:** Demonstrated capability to process and index heterogeneous data formats (PDF, DOCX, Markdown) with automated status tracking and error handling.
-- **Advanced Research Analytics:** Implementation of a real-time dashboard providing insights into system health, query volume, and storage utilization.
-- **Enterprise-Grade Transparency:** Integration of source citation mechanisms, allowing users to verify AI responses against retrieved document chunks.
-- **Human-in-the-Loop Feedback:** Established a feedback loop where users can rate the effectiveness of RAG-generated responses, providing data for future model tuning.
-- **Scalable Export Capabilities:** Development of a high-fidelity PDF export service for research results and chat summaries.
-- **Strict Multi-Tenant Security:** Verified isolation of user data across both relational (PostgreSQL) and vector (Qdrant) storage layers, ensuring zero data leakage between research tenants.
-
-This system serves as a foundational platform for further research into retrieval optimization and LLM performance across varied organizational datasets.
+This platform serves as a foundational tool for advanced research into retrieval optimization and Large Language Model (LLM) performance in heterogeneous organizational contexts.
