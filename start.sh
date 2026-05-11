@@ -10,17 +10,26 @@ run_compose() {
     fi
 }
 
-echo "--- Starting Docker Dependencies ---"
-# Check if containers are already running to avoid the 'ContainerConfig' bug in old compose versions
-if [[ $(run_compose ps --services --filter "status=running" | wc -l) -ge 2 ]]; then
-    echo "Dependencies are already running."
-else
-    echo "Starting containers..."
-    run_compose up -d || {
-        echo "Error: Compose failed. Attempting to fix by resetting containers..."
-        run_compose down
+echo "--- Infrastructure Check ---"
+COMPOSE_VER=$(run_compose version --short 2>/dev/null || docker-compose version --short 2>/dev/null)
+echo "Detected Compose Version: $COMPOSE_VER"
+
+if [[ "$COMPOSE_VER" == 1.* ]]; then
+    echo "Warning: You are using Docker Compose V1. If you see 'ContainerConfig' errors, we will attempt an automatic recovery."
+fi
+
+# Try to start. If it fails with the common v1 bug, force a reset.
+if ! run_compose up -d 2>/tmp/compose_error; then
+    ERROR_MSG=$(cat /tmp/compose_error)
+    echo "$ERROR_MSG"
+    if [[ "$ERROR_MSG" == *"ContainerConfig"* ]]; then
+        echo "Detected 'ContainerConfig' bug. Performing hard reset of containers..."
+        run_compose down --remove-orphans
         run_compose up -d
-    }
+    else
+        echo "Error: Infrastructure failed to start. Please check the logs above."
+        exit 1
+    fi
 fi
 
 echo "--- Verifying Ollama ---"

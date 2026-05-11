@@ -156,8 +156,13 @@ public class RagService : IRagService
                 .Where(d => docIds.Contains(d.Id))
                 .ToDictionaryAsync(d => d.Id, d => d.FileName, ct);
 
-            var contextText = string.Join("\n---\n", results.Select(r => r.Content));
-            var prompt = $"Context information is below.\n---------------------\n{contextText}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {question}\nAnswer: " ;
+            var contextText = results.Any() 
+                ? string.Join("\n---\n", results.Select(r => r.Content)) 
+                : "No relevant documents found in the database.";
+            
+            var prompt = results.Any()
+                ? $"Context information is below.\n---------------------\n{contextText}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {question}\nAnswer: "
+                : $"The user asked: '{question}'. Currently, there are no relevant documents in the search index to provide a grounded answer. Please inform the user that you don't have enough specific context to answer this based on the repository, but offer general information if appropriate, while maintaining a research-focused tone.";
 
             var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
             
