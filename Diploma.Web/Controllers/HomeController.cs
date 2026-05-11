@@ -1,3 +1,4 @@
+using Diploma.Infrastructure.Utils;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Diploma.Web.Models;
@@ -39,7 +40,7 @@ public class HomeController : Controller
             {
                 viewModel.TotalQueries = await _ragService.GetTotalQueriesAsync();
                 var storageBytes = await _ragService.GetStorageUsedAsync();
-                viewModel.StorageUsedFormatted = FormatStorage(storageBytes);
+                viewModel.StorageUsedFormatted = StorageFormatter.FormatSize(storageBytes);
             }
 
             return View(viewModel);
@@ -49,19 +50,6 @@ public class HomeController : Controller
             _logger.LogError(ex, "Error loading dashboard documents.");
             return View(new DashboardViewModel());
         }
-    }
-
-    private string FormatStorage(long bytes)
-    {
-        string[] units = { "B", "KB", "MB", "GB" };
-        double size = bytes;
-        int unitIndex = 0;
-        while (size >= 1024 && unitIndex < units.Length - 1)
-        {
-            size /= 1024;
-            unitIndex++;
-        }
-        return $"{size:F1} {units[unitIndex]}";
     }
 
     [AllowAnonymous]
