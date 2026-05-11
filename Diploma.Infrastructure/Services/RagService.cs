@@ -251,6 +251,31 @@ public class RagService : IRagService
             .ToListAsync(ct);
     }
 
+    public async Task<bool> ClearCollectionAsync(CancellationToken ct = default)
+    {
+        _logger.LogInformation("Clearing all data for user: {UserId}", userId);
+        try
+        {
+            // 1. Delete from Vector DB
+            await _vectorDb.DeleteUserVectorsAsync(_config.Qdrant.CollectionName, userId, ct);
+
+            // 2. Delete from PostgreSQL
+            // Global query filters will ensure we only delete the current user's documents
+            var documents = await _dbContext.Documents.ToListAsync(ct);
+            _dbContext.Documents.RemoveRange(documents);
+            
+            await _dbContext.SaveChangesAsync(ct);
+            
+            _logger.LogInformation("Successfully cleared all data for user: {UserId}", userId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clear collection for user: {UserId}", userId);
+            return false;
+        }
+    }
+
     public async Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default)
     {
         return await _dbContext.DocumentChunks
