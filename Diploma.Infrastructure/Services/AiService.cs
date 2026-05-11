@@ -22,36 +22,38 @@ public class AiService : IAiService
         _logger = logger;
     }
 
-    // This method generates an embedding for the given text chunk using the configured embedding generator.
     public async Task<float[]> GetTextEmbeddingAsync(string text, CancellationToken ct = default)
     {
-        _logger.LogDebug("Generating embedding for text (length: {Length})", text.Length);
+        var results = await GetTextEmbeddingsAsync(new[] { text }, ct);
+        return results.FirstOrDefault() ?? Array.Empty<float>();
+    }
+
+    public async Task<List<float[]>> GetTextEmbeddingsAsync(IEnumerable<string> texts, CancellationToken ct = default)
+    {
+        var textList = texts.ToList();
+        if (!textList.Any()) return new List<float[]>();
+
+        _logger.LogDebug("Generating embeddings for {Count} text chunks", textList.Count);
         var sw = Stopwatch.StartNew();
+
         try
         {
-            // Using the modern Microsoft.Extensions.AI approach
-            var generatedEmbeddings = await _embeddingGenerator.GenerateAsync(new[] { text }, cancellationToken: ct);
-            
+            var generatedEmbeddings = await _embeddingGenerator.GenerateAsync(textList, cancellationToken: ct);
             sw.Stop();
-            if (generatedEmbeddings.Count > 0)
-            {
-                _logger.LogDebug("Generated embedding in {ElapsedMs}ms. Vector size: {VectorSize}", 
-                    sw.ElapsedMilliseconds, generatedEmbeddings[0].Vector.Length);
-                return generatedEmbeddings[0].Vector.ToArray();
-            }
 
-            _logger.LogWarning("Embedding generator returned no results after {ElapsedMs}ms", sw.ElapsedMilliseconds);
-            return Array.Empty<float>();
+            _logger.LogDebug("Generated {Count} embeddings in {ElapsedMs}ms", 
+                generatedEmbeddings.Count, sw.ElapsedMilliseconds);
+
+            return generatedEmbeddings.Select(e => e.Vector.ToArray()).ToList();
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to generate embedding after {ElapsedMs}ms", sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "Failed to generate batch embeddings after {ElapsedMs}ms", sw.ElapsedMilliseconds);
             throw;
         }
     }
 
-    // This method generates an answer to the given prompt using the configured chat completion service.
     public async Task<string> GenerateAnswerAsync(string prompt, CancellationToken ct = default)
     {
         _logger.LogInformation("Generating AI answer for prompt (length: {Length})", prompt.Length);

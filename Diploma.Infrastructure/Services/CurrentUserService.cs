@@ -6,13 +6,22 @@ namespace Diploma.Infrastructure.Services;
 
 public class CurrentUserService : ICurrentUserService
 {
-    public string? UserId { get; }
-    public bool IsAdmin { get; }
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private string? _manualUserId;
+
+    public string? UserId => _manualUserId ?? _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+    public bool IsAdmin => _httpContextAccessor.HttpContext?.User?.IsInRole("Admin") ?? false;
 
     public CurrentUserService(IHttpContextAccessor httpContextAccessor)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        UserId = user?.FindFirstValue(ClaimTypes.NameIdentifier);
-        IsAdmin = user?.IsInRole("Admin") ?? false;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    /// <summary>
+    /// Allows setting the UserId manually for background processing contexts.
+    /// </summary>
+    public void SetManualUserId(string userId)
+    {
+        _manualUserId = userId;
     }
 }

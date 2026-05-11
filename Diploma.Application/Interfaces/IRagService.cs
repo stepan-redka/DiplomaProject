@@ -7,15 +7,15 @@ namespace Diploma.Application.Interfaces;
 /// </summary>
 public interface IRagService
 {
-    Task<IngestResponse> IngestDocumentAsync(string content, string documentName);
-    Task<QueryResponse> QueryAsync(string question, int topK = 3);
-    Task<bool> EnsureCollectionExistsAsync();
-    Task<int> GetDocumentCountAsync();
-    Task<List<DocumentDto>> GetUserDocumentsAsync();
-    Task<bool> ClearCollectionAsync();
-    Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500);
-    Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds);
+    Task<IngestResponse> IngestDocumentAsync(string content, string documentName, CancellationToken ct = default);
+    Task<QueryResponse> QueryAsync(string question, int topK = 3, CancellationToken ct = default);
+    Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default);
+    Task<int> GetDocumentCountAsync(CancellationToken ct = default);
+    Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default);
+    Task<bool> ClearCollectionAsync(CancellationToken ct = default);
+    Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default);
+    Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds, CancellationToken ct = default);
     
     // Chat History
-    Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50);
+    Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default);
 }

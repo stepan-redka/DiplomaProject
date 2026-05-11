@@ -18,10 +18,10 @@ public class QdrantVectorDatabase : IVectorDatabase
         _logger = logger;
     }
 
-    public async Task EnsureCollectionExistsAsync(string collectionName, int vectorSize)
+    public async Task EnsureCollectionExistsAsync(string collectionName, int vectorSize, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        var collections = await _client.ListCollectionsAsync();
+        var collections = await _client.ListCollectionsAsync(ct);
         if (collections.Contains(collectionName))
         {
             return;
@@ -35,9 +35,13 @@ public class QdrantVectorDatabase : IVectorDatabase
             {
                 Size = (ulong)vectorSize,
                 Distance = Distance.Cosine
-            });
+            }, cancellationToken: ct);
+
+            // PERFORMANCE OPTIMIZATION: Create index on user_id for multi-tenant isolation performance
+            await CreatePayloadIndexAsync(collectionName, "user_id", ct);
+
             sw.Stop();
-            _logger.LogInformation("Collection {CollectionName} created successfully in {ElapsedMs}ms.", collectionName, sw.ElapsedMilliseconds);
+            _logger.LogInformation("Collection {CollectionName} created successfully with indexes in {ElapsedMs}ms.", collectionName, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -47,39 +51,66 @@ public class QdrantVectorDatabase : IVectorDatabase
         }
     }
 
-    public async Task UpsertChunksAsync(string collectionName, IEnumerable<VectorData> data, string userId)
+    public async Task CreatePayloadIndexAsync(string collectionName, string fieldName, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Ensuring payload index for field {FieldName} in collection {CollectionName}", fieldName, collectionName);
+        try
+        {
+            await _client.CreatePayloadIndexAsync(collectionName, fieldName, PayloadSchemaType.Keyword, cancellationToken: ct);
+            _logger.LogInformation("Payload index for {FieldName} confirmed.", fieldName);
+        }
+        catch (Exception ex)
+        {
+            // Qdrant might throw if index already exists, which is fine for "Ensure" semantics
+            _logger.LogDebug(ex, "Payload index creation for {FieldName} note: {Message}", fieldName, ex.Message);
+        }
+    }
+
+    public async Task UpsertChunksAsync(string collectionName, IEnumerable<VectorData> data, string userId, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        var points = data.Select(d => new PointStruct
+        var allPoints = data.Select(d => 
         {
-            Id = d.ChunkId,
-            Vectors = d.Embedding,
-            Payload =
+            var point = new PointStruct
             {
-                ["user_id"] = userId,
-                ["document_id"] = d.DocumentId.ToString(),
-                ["content"] = d.Content
-            }
-        }).ToList();
+                Id = d.ChunkId,
+                Vectors = d.Embedding,
+                Payload =
+                {
+                    ["user_id"] = userId,
+                    ["document_id"] = d.DocumentId.ToString(),
+                    ["content"] = d.Content
+                }
+            };
 
-        // Add additional metadata if present
-        foreach (var (point, sourceData) in points.Zip(data))
-        {
-            if (sourceData.Metadata != null)
+            if (d.Metadata != null)
             {
-                foreach (var meta in sourceData.Metadata)
+                foreach (var meta in d.Metadata)
                 {
                     point.Payload[meta.Key] = meta.Value?.ToString() ?? string.Empty;
                 }
             }
-        }
+            return point;
+        }).ToList();
+
+        // PERFORMANCE OPTIMIZATION: Batch upserts to prevent timeouts and handle large payloads
+        const int batchSize = 100;
+        int totalUpserted = 0;
 
         try
         {
-            await _client.UpsertAsync(collectionName, points);
+            for (int i = 0; i < allPoints.Count; i += batchSize)
+            {
+                var batch = allPoints.Skip(i).Take(batchSize).ToList();
+                await _client.UpsertAsync(collectionName, batch, cancellationToken: ct);
+                totalUpserted += batch.Count;
+                _logger.LogDebug("Upserted batch of {BatchCount} points. Total: {TotalUpserted}/{AllCount}", 
+                    batch.Count, totalUpserted, allPoints.Count);
+            }
+
             sw.Stop();
             _logger.LogInformation("Successfully upserted {Count} points for user {UserId} into {Collection} in {ElapsedMs}ms", 
-                points.Count, userId, collectionName, sw.ElapsedMilliseconds);
+                allPoints.Count, userId, collectionName, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -90,7 +121,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         }
     }
 
-    public async Task<IEnumerable<ScoredChunkDto>> SearchAsync(string collectionName, float[] embedding, string userId, int limit = 5)
+    public async Task<IEnumerable<ScoredChunkDto>> SearchAsync(string collectionName, float[] embedding, string userId, int limit = 5, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         // STRICT isolation: Filter by user_id
@@ -105,7 +136,8 @@ public class QdrantVectorDatabase : IVectorDatabase
                 collectionName,
                 embedding,
                 filter: filter,
-                limit: (ulong)limit
+                limit: (ulong)limit,
+                cancellationToken: ct
             );
 
             sw.Stop();
@@ -129,7 +161,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         }
     }
 
-    public async Task DeleteDocumentVectorsAsync(string collectionName, Guid documentId, string userId)
+    public async Task DeleteDocumentVectorsAsync(string collectionName, Guid documentId, string userId, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         var filter = new Filter
@@ -143,7 +175,7 @@ public class QdrantVectorDatabase : IVectorDatabase
 
         try
         {
-            await _client.DeleteAsync(collectionName, filter);
+            await _client.DeleteAsync(collectionName, filter, cancellationToken: ct);
             sw.Stop();
             _logger.LogInformation("Deleted vectors for document {DocumentId} and user {UserId} in {ElapsedMs}ms", 
                 documentId, userId, sw.ElapsedMilliseconds);

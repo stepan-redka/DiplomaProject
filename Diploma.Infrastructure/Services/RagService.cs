@@ -2,17 +2,16 @@ using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
 using Diploma.Infrastructure.Persistence;
-using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using Document = Diploma.Domain.Entities.Document;
 
 namespace Diploma.Infrastructure.Services;
 
 public class RagService : IRagService
 {
-    
     private readonly ITextChunkingService _chunkingService;
     private readonly IAiService _aiService;
     private readonly IVectorDatabase _vectorDb;
@@ -40,8 +39,7 @@ public class RagService : IRagService
         _logger = logger;
     }
 
-    
-    public async Task<IngestResponse> IngestDocumentAsync(string content, string documentName)
+    public async Task<IngestResponse> IngestDocumentAsync(string content, string documentName, CancellationToken ct = default)
     {
         _logger.LogInformation("Starting ingestion for document: {DocumentName}. Content length: {ContentLength}", documentName, content.Length);
         var sw = Stopwatch.StartNew();
@@ -51,9 +49,10 @@ public class RagService : IRagService
             var textChunks = _chunkingService.ChunkText(content, _config.Chunking.MaxChunkSize, _config.Chunking.ChunkOverlap);
             _logger.LogDebug("Split document into {ChunkCount} chunks.", textChunks.Count);
 
+            var documentId = Guid.NewGuid();
             var document = new Document
             {
-                Id = Guid.NewGuid(),
+                Id = documentId,
                 UserId = userId,
                 FileName = documentName,
                 CreatedAt = DateTime.UtcNow,
@@ -61,43 +60,56 @@ public class RagService : IRagService
             };
             _dbContext.Documents.Add(document);
 
+            // PERFORMANCE OPTIMIZATION: Use Batch Embedding Generation
+            // This is MUCH faster than individual calls in a loop
+            var embeddings = await _aiService.GetTextEmbeddingsAsync(textChunks, ct);
+            
             var vectorDataList = new List<VectorData>();
-            int index = 0;
-            foreach (var chunk in textChunks)
+            var chunksToAdd = new List<DocumentChunk>();
+
+            for (int i = 0; i < textChunks.Count; i++)
             {
                 var chunkId = Guid.NewGuid();
-                var chunkEntity = new DocumentChunk
+                var text = textChunks[i];
+                var embedding = embeddings[i];
+
+                vectorDataList.Add(new VectorData(
+                    chunkId,
+                    documentId,
+                    embedding,
+                    text,
+                    new Dictionary<string, object> { { "index", i } }
+                ));
+
+                chunksToAdd.Add(new DocumentChunk
                 {
                     Id = chunkId,
                     UserId = userId,
-                    DocumentId = document.Id,
-                    Content = chunk,
-                    ChunkIndex = index,
+                    DocumentId = documentId,
+                    Content = text,
+                    ChunkIndex = i,
                     CreatedAt = DateTime.UtcNow
-                };
-                _dbContext.DocumentChunks.Add(chunkEntity);
-                
-                var embedding = await _aiService.GetTextEmbeddingAsync(chunk);
-                vectorDataList.Add(new VectorData(
-                    chunkId,
-                    document.Id,
-                    embedding,
-                    chunk,
-                    new Dictionary<string, object> {{"index", index}}
-                ));
-                index++;
+                });
             }
 
-            await _dbContext.SaveChangesAsync();
-            _logger.LogDebug("Metadata and chunks saved to PostgreSQL.");
+            // PERFORMANCE OPTIMIZATION: Use AddRange for batch addition
+            _dbContext.DocumentChunks.AddRange(chunksToAdd);
 
-            await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize);
-            await _vectorDb.UpsertChunksAsync(_config.Qdrant.CollectionName, vectorDataList, userId);
+            await _dbContext.SaveChangesAsync(ct);
+            _logger.LogDebug("Metadata and {ChunkCount} chunks saved to PostgreSQL.", chunksToAdd.Count);
+
+            await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize, ct);
+            await _vectorDb.UpsertChunksAsync(_config.Qdrant.CollectionName, vectorDataList, userId, ct);
             
             sw.Stop();
             _logger.LogInformation("Successfully ingested {DocumentName} in {ElapsedMs}ms.", documentName, sw.ElapsedMilliseconds);
 
-            return new IngestResponse {Success = true, ChunksCreated = textChunks.Count, Message = "Success!"}; 
+            return new IngestResponse { Success = true, ChunksCreated = textChunks.Count, Message = "Success!" }; 
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Ingestion of {DocumentName} was canceled.", documentName);
+            return new IngestResponse { Success = false, Message = "Operation was canceled." };
         }
         catch (Exception ex)
         {
@@ -106,23 +118,21 @@ public class RagService : IRagService
         }
     }
 
-    public async Task<QueryResponse> QueryAsync(string question, int topK = 3)
+    public async Task<QueryResponse> QueryAsync(string question, int topK = 3, CancellationToken ct = default)
     {
         _logger.LogInformation("Executing RAG query: {Question}", question);
         var sw = Stopwatch.StartNew();
 
         try
         {
-            // 1. Get or Create Session
-            var session = await _dbContext.ChatSessions.FirstOrDefaultAsync();
+            var session = await _dbContext.ChatSessions.FirstOrDefaultAsync(ct);
             if (session == null)
             {
                 session = new ChatSession { UserId = userId, Title = "Default Chat" };
                 _dbContext.ChatSessions.Add(session);
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync(ct);
             }
 
-            // 2. Save User Message
             _dbContext.ChatMessages.Add(new ChatMessage
             {
                 UserId = userId,
@@ -131,17 +141,16 @@ public class RagService : IRagService
                 Content = question
             });
 
-            var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question);
-            var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, topK)).ToList();
+            var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question, ct);
+            var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, topK, ct)).ToList();
 
             _logger.LogDebug("Vector search returned {ResultCount} chunks.", results.Count);
 
             var contextText = string.Join("\n---\n", results.Select(r => r.Content));
             var prompt = $"Context information is below.\n---------------------\n{contextText}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {question}\nAnswer: " ;
 
-            var answer = await _aiService.GenerateAnswerAsync(prompt);
+            var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
             
-            // 3. Save AI Message
             _dbContext.ChatMessages.Add(new ChatMessage
             {
                 UserId = userId,
@@ -150,7 +159,7 @@ public class RagService : IRagService
                 Content = answer
             });
             
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Query completed in {ElapsedMs}ms.", sw.ElapsedMilliseconds);
@@ -167,6 +176,11 @@ public class RagService : IRagService
                 ProcessingTimeMs = sw.ElapsedMilliseconds
             };
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Query for '{Question}' was canceled.", question);
+            return new QueryResponse { Answer = "The operation was canceled.", ProcessingTimeMs = sw.ElapsedMilliseconds };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during QueryAsync for question: {Question}", question);
@@ -174,30 +188,30 @@ public class RagService : IRagService
         }
     }
 
-    public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50)
+    public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default)
     {
         return await _dbContext.ChatMessages
             .OrderByDescending(m => m.CreatedAt)
             .Take(limit)
-            .OrderBy(m => m.CreatedAt) // Return in chronological order
+            .OrderBy(m => m.CreatedAt)
             .Select(m => new ChatMessageDto
             {
                 Role = m.Role,
                 Content = m.Content,
                 CreatedAt = m.CreatedAt
             })
-            .ToListAsync();
+            .ToListAsync(ct);
     }
 
-    public async Task<bool> EnsureCollectionExistsAsync()
+    public async Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default)
     {
-        await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize);
+        await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize, ct);
         return true;
     }
 
-    public async Task<int> GetDocumentCountAsync() => await _dbContext.Documents.CountAsync();
+    public async Task<int> GetDocumentCountAsync(CancellationToken ct = default) => await _dbContext.Documents.CountAsync(ct);
 
-    public async Task<List<DocumentDto>> GetUserDocumentsAsync()
+    public async Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default)
     {
         return await _dbContext.Documents
             .Select(d => new DocumentDto
@@ -207,10 +221,10 @@ public class RagService : IRagService
                 CreatedAt = d.CreatedAt,
                 ChunkCount = d.Chunks.Count
             })
-            .ToListAsync();
+            .ToListAsync(ct);
     }
 
-    public async Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500)
+    public async Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default)
     {
         return await _dbContext.DocumentChunks
             .Include(c => c.Document)
@@ -223,51 +237,52 @@ public class RagService : IRagService
                 ContentPreview = c.Content.Length > 100 ? c.Content.Substring(0, 100) + "..." : c.Content,
                 ChunkIndex = c.ChunkIndex
             })
-            .ToListAsync();
+            .ToListAsync(ct);
     }
 
-
-    //method to delete chunks by their IDs, ensuring that only chunks belonging to the authenticated user are deleted, and also removing the corresponding vectors from the vector database to maintain consistency. Returns the count of deleted chunks.
-    public async Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds)
+    public async Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds, CancellationToken ct = default)
     {
-        //string to guid conversion with error handling
         var guids = chunkIds.Select(Guid.Parse).ToList();
+        var chunksToDelete = await _dbContext.DocumentChunks
+            .Where(c => guids.Contains(c.Id))
+            .ToListAsync(ct);
 
-        //find only chunks that belong to the user
-        var chunksToDelete = await _dbContext.DocumentChunks.Where(c => guids.Contains(c.Id)).ToListAsync();
+        if(!chunksToDelete.Any()) return 0;
 
-        if(!chunksToDelete.Any())
+        // PERFORMANCE OPTIMIZATION: Group by DocumentId to minimize redundant calls to Vector DB
+        var documentGroups = chunksToDelete.GroupBy(c => c.DocumentId);
+
+        await Parallel.ForEachAsync(documentGroups, new ParallelOptions 
+        { 
+            CancellationToken = ct, 
+            MaxDegreeOfParallelism = Environment.ProcessorCount 
+        }, async (group, token) => 
         {
-            _logger.LogWarning("No chunks found for deletion with provided IDs: {ChunkIds}", chunkIds);
-            return 0;
-        }
+            // The vector DB delete logic is document-scoped in this implementation
+            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, group.Key, userId, token);
+        });
 
-        //delete from vector database first to avoid orphaned vectors in case of failure
-        foreach (var chunk in chunksToDelete)
-        {
-            _logger.LogInformation("Deleting chunk {ChunkId} from document {DocumentId}", chunk.Id, chunk.DocumentId);
-            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, chunk.DocumentId, userId);
-        }
-
-        //delete from database(postgre)
         _dbContext.DocumentChunks.RemoveRange(chunksToDelete);
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync(ct);
         return chunksToDelete.Count;
     }
 
-
-    //method to clear all documents and chunks for the authenticated user, ensuring that all associated vectors in the vector database are also deleted to maintain consistency. Returns true if the operation is successful.
-     public async Task<bool> ClearCollectionAsync()
+    public async Task<bool> ClearCollectionAsync(CancellationToken ct = default)
     {
-        var myDocs = await _dbContext.Documents.ToListAsync();
+        var myDocs = await _dbContext.Documents.ToListAsync(ct);
 
-        foreach (var doc in myDocs)
+        // PERFORMANCE OPTIMIZATION: Parallelize vector deletion per document
+        await Parallel.ForEachAsync(myDocs, new ParallelOptions 
+        { 
+            CancellationToken = ct, 
+            MaxDegreeOfParallelism = Environment.ProcessorCount 
+        }, async (doc, token) => 
         {
-            _logger.LogInformation("Deleting document {DocumentId} with name {FileName}", doc.Id, doc.FileName);
-            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, doc.Id, userId);
-        }
+            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, doc.Id, userId, token);
+        });
+
         _dbContext.Documents.RemoveRange(myDocs);
-        await _dbContext.SaveChangesAsync();    
+        await _dbContext.SaveChangesAsync(ct);    
         return true;
     }
 }
