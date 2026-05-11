@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Diploma.Application.Interfaces;
 using Diploma.Application.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using Diploma.Infrastructure.Services;
+using Microsoft.IO;
 
 namespace Diploma.Web.Controllers;
 
@@ -9,16 +11,22 @@ namespace Diploma.Web.Controllers;
 public class DocumentsController : Controller
 {
     private readonly IRagService _ragService;
-    private readonly IDocumentParsingService _documentParsingService;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IngestionChannel _ingestionChannel;
+    private readonly RecyclableMemoryStreamManager _streamManager;
     private readonly ILogger<DocumentsController> _logger;
 
     public DocumentsController(
         IRagService ragService, 
-        IDocumentParsingService documentParsingService,
+        ICurrentUserService currentUserService,
+        IngestionChannel ingestionChannel,
+        RecyclableMemoryStreamManager streamManager,
         ILogger<DocumentsController> logger)
     {
         _ragService = ragService;
-        _documentParsingService = documentParsingService;
+        _currentUserService = currentUserService;
+        _ingestionChannel = ingestionChannel;
+        _streamManager = streamManager;
         _logger = logger;
     }
 
@@ -39,47 +47,33 @@ public class DocumentsController : Controller
             return BadRequest("Please select at least one file to upload.");
         }
 
-        int successCount = 0;
-        List<string> errors = new();
+        var userId = _currentUserService.UserId;
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
+        int queuedCount = 0;
         foreach (var file in files)
         {
             try
             {
-                using var stream = file.OpenReadStream();
-                var parsedDoc = await _documentParsingService.ParseDocumentAsync(stream, file.FileName);
+                // PERFORMANCE: Use RecyclableMemoryStream to avoid LOH fragmentation
+                using var pooledStream = _streamManager.GetStream();
+                await file.CopyToAsync(pooledStream);
+                var fileData = pooledStream.ToArray();
 
-                if (string.IsNullOrWhiteSpace(parsedDoc.Content))
-                {
-                    errors.Add($"{file.FileName}: Document contains no readable text.");
-                    continue;
-                }
-
-                var response = await _ragService.IngestDocumentAsync(parsedDoc.Content, file.FileName);
-
-                if (response.Success)
-                {
-                    successCount++;
-                }
-                else
-                {
-                    errors.Add($"{file.FileName}: {response.Message}");
-                }
+                var task = new IngestionTask(fileData, file.FileName, userId);
+                await _ingestionChannel.Writer.WriteAsync(task);
+                
+                _logger.LogInformation("File {FileName} queued for background ingestion.", file.FileName);
+                queuedCount++;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing upload for {FileName}", file.FileName);
-                errors.Add($"{file.FileName}: Internal error.");
+                _logger.LogError(ex, "Error queuing file {FileName}", file.FileName);
             }
         }
 
-        if (errors.Any())
-        {
-            var message = $"Processed {successCount} files. Errors: {string.Join(" | ", errors)}";
-            return successCount > 0 ? Ok(message) : BadRequest(message);
-        }
-
-        return RedirectToAction(nameof(Index));
+        // Return 202 Accepted for high-load responsiveness
+        return Accepted(new { message = $"Successfully queued {queuedCount} files for processing." });
     }
 
     [HttpPost]
@@ -91,23 +85,25 @@ public class DocumentsController : Controller
             return BadRequest("Content cannot be empty.");
         }
 
+        var userId = _currentUserService.UserId;
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
         var docName = string.IsNullOrWhiteSpace(request.DocumentName) 
-            ? $"Manual_Entry_{DateTime.Now:yyyyMMdd_HHmm}" 
+            ? $"Manual_Entry_{DateTime.Now:yyyyMMdd_HHmm}.txt" 
             : request.DocumentName;
 
         try
         {
-            var response = await _ragService.IngestDocumentAsync(request.Content, docName);
-            if (response.Success)
-            {
-                return Ok(new { message = "Text indexed successfully", chunks = response.ChunksCreated });
-            }
-            return StatusCode(500, $"Indexing failed: {response.Message}");
+            var fileData = System.Text.Encoding.UTF8.GetBytes(request.Content);
+            var task = new IngestionTask(fileData, docName, userId);
+            await _ingestionChannel.Writer.WriteAsync(task);
+
+            return Accepted(new { message = "Text queued for indexing." });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing pasted text.");
-            return StatusCode(500, "An error occurred while processing the text.");
+            _logger.LogError(ex, "Error queuing pasted text.");
+            return StatusCode(500, "An error occurred while queuing the text.");
         }
     }
 

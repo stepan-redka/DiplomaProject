@@ -1,7 +1,6 @@
 /**
  * RagSystem Client-Side Orchestrator
- * This module handles the asynchronous interaction between the Dashboard UI
- * and the .NET Controllers.
+ * High-fidelity 'v0' implementation for Tailwind/Lucide UI.
  */
 
 class RagApp {
@@ -13,56 +12,54 @@ class RagApp {
         this.clearBtn = document.getElementById('clearBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         
-        // New Tuning and Paste UI
+        // Tuning and Paste UI
         this.topKRange = document.getElementById('topKRange');
         this.topKValue = document.getElementById('topKValue');
         this.pasteBtn = document.getElementById('pasteBtn');
         this.savePasteBtn = document.getElementById('savePasteBtn');
-        this.pasteModal = new bootstrap.Modal(document.getElementById('pasteModal'));
+        this.cancelPasteBtn = document.getElementById('cancelPasteBtn');
+        this.closePasteBtn = document.getElementById('closePasteBtn');
+        this.pasteModal = document.getElementById('pasteModal');
         
         this.initEventListeners();
         this.loadChatHistory();
     }
 
     initEventListeners() {
-        // Send message on click or Enter
         this.sendBtn.addEventListener('click', () => this.handleAsk());
         this.chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleAsk();
         });
 
-        // Handle file upload (Batch)
         this.fileInput.addEventListener('change', () => this.handleUpload());
-
-        // Handle collection clearing
         this.clearBtn.addEventListener('click', () => this.handleClear());
 
-        // Top-K Slider
         if (this.topKRange) {
             this.topKRange.addEventListener('input', (e) => {
                 this.topKValue.innerText = e.target.value;
             });
         }
 
-        // Paste Text
         if (this.pasteBtn) {
-            this.pasteBtn.addEventListener('click', () => this.pasteModal.show());
+            this.pasteBtn.addEventListener('click', () => this.pasteModal.classList.remove('hidden'));
         }
+        
+        const closeActions = [this.cancelPasteBtn, this.closePasteBtn];
+        closeActions.forEach(btn => {
+            if (btn) btn.addEventListener('click', () => this.pasteModal.classList.add('hidden'));
+        });
+
         if (this.savePasteBtn) {
             this.savePasteBtn.addEventListener('click', () => this.handlePaste());
         }
     }
 
-    /**
-     * Loads past messages from the server.
-     */
     async loadChatHistory() {
         try {
             const response = await fetch('/Chat/GetHistory');
             if (response.ok) {
                 const history = await response.json();
                 if (history.length > 0) {
-                    // Clear the welcome message if we have real history
                     this.chatWindow.innerHTML = '';
                     history.forEach(msg => {
                         this.appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content);
@@ -74,9 +71,6 @@ class RagApp {
         }
     }
 
-    /**
-     * Sends a question to the ChatController/Ask endpoint.
-     */
     async handleAsk() {
         const question = this.chatInput.value.trim();
         if (!question) return;
@@ -90,13 +84,8 @@ class RagApp {
         try {
             const response = await fetch('/Chat/Ask', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    question: question,
-                    topK: topK
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question, topK: topK })
             });
 
             if (!response.ok) throw new Error('Failed to communicate with AI service.');
@@ -115,9 +104,6 @@ class RagApp {
         }
     }
 
-    /**
-     * Handles file upload to DocumentsController/Upload.
-     */
     async handleUpload() {
         const files = this.fileInput.files;
         if (!files || files.length === 0) return;
@@ -127,49 +113,38 @@ class RagApp {
             formData.append('files', files[i]);
         }
         
-        // Anti-Forgery Token
-        const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
-        const token = tokenElement ? tokenElement.value : '';
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
         
-        this.appendMessage('ai', `Uploading and indexing ${files.length} file(s)...`);
+        this.appendMessage('ai', `Indexing ${files.length} document(s)...`);
 
         try {
             const response = await fetch('/Documents/Upload', {
                 method: 'POST',
-                headers: {
-                    'RequestVerificationToken': token
-                },
+                headers: { 'RequestVerificationToken': token },
                 body: formData
             });
 
             if (response.ok) {
-                window.location.reload(); // Refresh to show new documents in sidebar
+                window.location.reload();
             } else {
                 const error = await response.text();
-                this.appendMessage('ai', 'Upload failed: ' + error);
+                this.appendMessage('ai', 'Indexing failed: ' + error);
             }
         } catch (error) {
             this.appendMessage('ai', 'Network error during upload.');
         }
     }
 
-    /**
-     * Handles manual text paste.
-     */
     async handlePaste() {
         const content = document.getElementById('manualContent').value.trim();
         const docName = document.getElementById('manualDocName').value.trim();
 
-        if (!content) {
-            alert('Please enter some text.');
-            return;
-        }
+        if (!content) return;
 
-        const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
-        const token = tokenElement ? tokenElement.value : '';
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
         this.savePasteBtn.disabled = true;
-        this.savePasteBtn.innerText = 'Indexing...';
+        this.savePasteBtn.innerText = 'INDEXING...';
 
         try {
             const response = await fetch('/Documents/PasteText', {
@@ -178,42 +153,31 @@ class RagApp {
                     'Content-Type': 'application/json',
                     'RequestVerificationToken': token
                 },
-                body: JSON.stringify({
-                    content: content,
-                    documentName: docName
-                })
+                body: JSON.stringify({ content: content, documentName: docName })
             });
 
             if (response.ok) {
-                this.pasteModal.hide();
                 window.location.reload();
             } else {
-                const error = await response.text();
-                alert('Failed to index text: ' + error);
+                alert('Failed to index text.');
             }
         } catch (error) {
             alert('Network error during indexing.');
         } finally {
             this.savePasteBtn.disabled = false;
-            this.savePasteBtn.innerText = 'Save & Index';
+            this.savePasteBtn.innerText = 'INDEX CONTENT';
         }
     }
 
-    /**
-     * Clears the user's document collection.
-     */
     async handleClear() {
-        if (!confirm('Are you sure you want to delete all uploaded knowledge?')) return;
+        if (!confirm('Destroy current knowledge collection? This action is irreversible.')) return;
 
-        const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]');
-        const token = tokenElement ? tokenElement.value : '';
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
         try {
             const response = await fetch('/Documents/ClearCollection', {
                 method: 'POST',
-                headers: {
-                    'RequestVerificationToken': token
-                }
+                headers: { 'RequestVerificationToken': token }
             });
 
             if (response.ok) {
@@ -224,50 +188,77 @@ class RagApp {
         }
     }
 
-    /**
-     * Appends a message bubble to the chat window.
-     * @param {'user' | 'ai'} sender 
-     * @param {string} text 
-     * @param {number} [latency]
-     */
     appendMessage(sender, text, latency) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message message-${sender}`;
+        const container = document.createElement('div');
+        container.className = 'max-w-2xl mx-auto flex gap-6 fade-in';
         
-        // Clean text formatting (handle newlines)
-        const formattedText = text.replace(/\n/g, '<br/>');
-        msgDiv.innerHTML = formattedText;
+        const iconDiv = document.createElement('div');
+        iconDiv.className = `w-8 h-8 rounded shrink-0 flex items-center justify-center border ${sender === 'ai' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-white'}`;
+        
+        const icon = document.createElement('i');
+        icon.setAttribute('data-lucide', sender === 'ai' ? 'sparkles' : 'user');
+        icon.className = `w-4 h-4 ${sender === 'ai' ? 'text-zinc-400' : 'text-black'}`;
+        
+        iconDiv.appendChild(icon);
+        container.appendChild(iconDiv);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'flex-1 space-y-2';
+        
+        const p = document.createElement('p');
+        p.className = `text-sm leading-relaxed ${sender === 'ai' ? 'text-zinc-300' : 'text-zinc-100 font-medium'}`;
+        p.innerHTML = text.replace(/\n/g, '<br/>');
+        
+        contentDiv.appendChild(p);
 
         if (latency) {
-            const latencySmall = document.createElement('small');
-            latencySmall.className = 'd-block text-muted mt-2';
-            latencySmall.style.fontSize = '0.7rem';
-            latencySmall.innerText = `Response time: ${latency}ms`;
-            msgDiv.appendChild(latencySmall);
+            const stat = document.createElement('div');
+            stat.className = 'flex items-center gap-2 mt-4';
+            stat.innerHTML = `<span class="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Latency: ${latency}ms</span>`;
+            contentDiv.appendChild(stat);
         }
 
-        this.chatWindow.appendChild(msgDiv);
+        container.appendChild(contentDiv);
+        this.chatWindow.appendChild(container);
+        
+        if (window.lucide) {
+            lucide.createIcons({
+                root: container
+            });
+        }
         this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
     }
 
     appendSources(sources) {
-        const sourcesDiv = document.createElement('div');
-        sourcesDiv.className = 'message message-ai bg-secondary bg-opacity-10 small py-2';
-        sourcesDiv.style.fontSize = '0.8rem';
-        sourcesDiv.innerHTML = '<strong>Sources:</strong><br/>' + 
-            sources.map(s => `• ${s.sourceDocument} (Score: ${s.score.toFixed(2)})`).join('<br/>');
+        const container = document.createElement('div');
+        container.className = 'max-w-2xl mx-auto pl-14';
         
-        this.chatWindow.appendChild(sourcesDiv);
+        const inner = document.createElement('div');
+        inner.className = 'p-4 rounded-lg bg-zinc-900/50 border border-zinc-800/50 space-y-2';
+        
+        const title = document.createElement('h4');
+        title.className = 'text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2';
+        title.innerText = 'Retrieval Sources';
+        inner.appendChild(title);
+
+        sources.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between text-[11px] text-zinc-400';
+            item.innerHTML = `<span>${s.sourceDocument}</span><span class="font-mono text-zinc-600">Score: ${s.score.toFixed(3)}</span>`;
+            inner.appendChild(item);
+        });
+
+        container.appendChild(inner);
+        this.chatWindow.appendChild(container);
         this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
     }
 
     showLoading(show) {
-        this.loadingIndicator.classList.toggle('d-none', !show);
+        this.loadingIndicator.classList.toggle('hidden', !show);
         this.sendBtn.disabled = show;
     }
 }
 
-// Initialize the app when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new RagApp();
 });

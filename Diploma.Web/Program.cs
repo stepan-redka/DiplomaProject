@@ -7,6 +7,7 @@ using Diploma.Application.DTOs;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
+using Microsoft.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,6 +63,11 @@ builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// --- PERFORMANCE & BACKGROUND PROCESSING ---
+builder.Services.AddSingleton<RecyclableMemoryStreamManager>();
+builder.Services.AddSingleton<IngestionChannel>();
+builder.Services.AddHostedService<IngestionBackgroundService>();
 
 var app = builder.Build();
 
