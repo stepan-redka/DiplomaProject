@@ -27,5 +27,6 @@ wha# Gemini CLI: Coach Mode & Architectural Mandates
 8. **[DONE]** API Controllers (Documents, Chat) with Structured Logging.
 9. **[DONE]** Custom Identity System (AccountController & Security Views).
 10. **[DONE]** Background Ingestion (System.Threading.Channels) & Performance Optimizations (RecyclableMemoryStream).
-11. **[IN PROGRESS]** Google Auth and expanding User Profile (detailed usage stats & RAG tuning).
-12. **[NEXT]** Final E2E Validation and Thesis Documentation.
+11. **[DONE]** Enterprise Research Features: Feedback Loop, Source Transparency, and PDF Export.
+12. **[DONE]** Profile Minimalism (v0 Aesthetic Research Stats).
+13. **[NEXT]** Final E2E Validation and Thesis Documentation.
