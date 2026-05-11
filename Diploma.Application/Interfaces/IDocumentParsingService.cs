@@ -7,5 +7,5 @@ namespace Diploma.Application.Interfaces;
 /// </summary>
 public interface IDocumentParsingService
 {
-    Task<ParsedDocument> ParseDocumentAsync(Stream fileStream, string fileName);
+    Task<ParsedDocument> ParseDocumentAsync(Stream fileStream, string fileName, CancellationToken ct = default);
 }

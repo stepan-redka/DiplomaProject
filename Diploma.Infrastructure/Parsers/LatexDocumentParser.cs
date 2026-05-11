@@ -23,14 +23,14 @@ public class LatexDocumentParser : IDocumentParser
     public DocumentType GetDocumentType(string fileName) =>
         DocumentType.LaTeX;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogInformation("Parsing LaTeX document: {FileName}", fileName);
         var sw = Stopwatch.StartNew();
         try
         {
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Successfully parsed LaTeX {FileName} in {ElapsedMs}ms. Length: {Length}", 
@@ -43,6 +43,11 @@ public class LatexDocumentParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.LaTeX
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("LaTeX parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

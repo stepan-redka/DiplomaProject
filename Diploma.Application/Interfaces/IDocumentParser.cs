@@ -8,7 +8,7 @@ namespace Diploma.Application.Interfaces;
 /// </summary>
 public interface IDocumentParser
 {
-    Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName);
+    Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default);
     DocumentType GetDocumentType(string fileName);
     bool IsSupported(string fileName);
 }

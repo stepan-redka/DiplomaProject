@@ -54,9 +54,9 @@ public class RagServiceTests
         _mockChunker.Setup(c => c.ChunkText(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .Returns(new List<string> { "chunk1" });
         
-        // FIX: Specify CancellationToken
-        _mockAi.Setup(s => s.GetTextEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new float[768]);
+        // Mock the new batch embedding method
+        _mockAi.Setup(s => s.GetTextEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<float[]> { new float[768] });
 
         var service = new RagService(_mockChunker.Object, _mockAi.Object, _mockVectorDb.Object, _dbContext, _config, _mockUserService.Object, _mockLogger.Object);
 
@@ -67,7 +67,7 @@ public class RagServiceTests
         var doc = await _dbContext.Documents.FirstAsync();
         Assert.Equal(userId, doc.UserId);
         
-        _mockVectorDb.Verify(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<IEnumerable<VectorData>>(), userId), Times.Once);
+        _mockVectorDb.Verify(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<IEnumerable<VectorData>>(), userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -76,13 +76,15 @@ public class RagServiceTests
         // Arrange
         var userId = "user-999";
         _mockUserService.Setup(s => s.UserId).Returns(userId);
+        
+        // Individual embedding call still used in QueryAsync
         _mockAi.Setup(s => s.GetTextEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new float[768]);
+            
         _mockAi.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Mocked AI Answer");
         
-        // FIX: Specify the limit explicitly to avoid CS0854
-        _mockVectorDb.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, It.IsAny<int>()))
+        _mockVectorDb.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ScoredChunkDto>());
 
         var service = new RagService(_mockChunker.Object, _mockAi.Object, _mockVectorDb.Object, _dbContext, _config, _mockUserService.Object, _mockLogger.Object);
@@ -91,7 +93,7 @@ public class RagServiceTests
         await service.QueryAsync("What is RAG?", 3);
 
         // Assert
-        _mockVectorDb.Verify(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, 3), Times.Once);
+        _mockVectorDb.Verify(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, 3, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -103,12 +105,12 @@ public class RagServiceTests
 
         // Seed data for User A
         _mockUserService.Setup(s => s.UserId).Returns(userA);
-        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docA.txt" });
+        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docA.txt", UserId = userA });
         await _dbContext.SaveChangesAsync();
 
         // Seed data for User B
         _mockUserService.Setup(s => s.UserId).Returns(userB);
-        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docB.txt" });
+        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docB.txt", UserId = userB });
         await _dbContext.SaveChangesAsync();
 
         // Switch back to User A for the actual test
@@ -120,7 +122,6 @@ public class RagServiceTests
         await service.ClearCollectionAsync();
 
         // Assert
-        // We need a fresh context or use IgnoreQueryFilters to see everything
         var allDocs = await _dbContext.Documents.IgnoreQueryFilters().ToListAsync();
         Assert.Single(allDocs);
         Assert.Equal(userB, allDocs[0].UserId);

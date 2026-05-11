@@ -23,14 +23,14 @@ public class MarkdownDocumentParser : IDocumentParser
     public DocumentType GetDocumentType(string fileName) =>
         DocumentType.Markdown;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogInformation("Parsing Markdown document: {FileName}", fileName);
         var sw = Stopwatch.StartNew();
         try
         {
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Successfully parsed Markdown {FileName} in {ElapsedMs}ms. Length: {Length}", 
@@ -43,6 +43,11 @@ public class MarkdownDocumentParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.Markdown
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Markdown parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

@@ -4,15 +4,18 @@ using Diploma.Domain.Entities;
 using Diploma.Domain.Enums;
 using DocumentFormat.OpenXml.Packaging;
 using Microsoft.Extensions.Logging;
+using Microsoft.IO;
 
 namespace Diploma.Infrastructure.Parsers;
 
 public class DocxDocumentParser : IDocumentParser
 {
+    private readonly RecyclableMemoryStreamManager _streamManager;
     private readonly ILogger<DocxDocumentParser> _logger;
 
-    public DocxDocumentParser(ILogger<DocxDocumentParser> logger)
+    public DocxDocumentParser(RecyclableMemoryStreamManager streamManager, ILogger<DocxDocumentParser> logger)
     {
+        _streamManager = streamManager;
         _logger = logger;
     }
 
@@ -23,16 +26,17 @@ public class DocxDocumentParser : IDocumentParser
     public DocumentType GetDocumentType(string fileName) =>
         DocumentType.Docx;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         try
         {
-            // Copy to memory stream to ensure seekability, similar to PdfDocumentParser
-            using var memoryStream = new MemoryStream();
-            await fileStream.CopyToAsync(memoryStream);
+            // PERFORMANCE: Use RecyclableMemoryStream to ensure seekability without LOH pressure
+            using var memoryStream = _streamManager.GetStream();
+            await fileStream.CopyToAsync(memoryStream, ct);
             memoryStream.Position = 0;
             _logger.LogInformation("Parsing DOCX document: {FileName}. Size: {FileSize} bytes", fileName, memoryStream.Length);
 
+            // OpenXml is synchronous, but we can check cancellation in loops
             using var wordDocument = WordprocessingDocument.Open(memoryStream, false);
             var body = wordDocument.MainDocumentPart?.Document.Body;
             
@@ -48,10 +52,10 @@ public class DocxDocumentParser : IDocumentParser
                 };
             }
 
-            // Extract text from paragraphs to preserve basic structure
             var textBuilder = new StringBuilder();
             foreach (var element in body.Elements())
             {
+                ct.ThrowIfCancellationRequested();
                 var text = element.InnerText;
                 if (!string.IsNullOrEmpty(text))
                 {
@@ -66,6 +70,11 @@ public class DocxDocumentParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.Docx
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("DOCX parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

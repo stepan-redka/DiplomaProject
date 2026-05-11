@@ -25,14 +25,14 @@ public class HtmlDocumentParser : IDocumentParser
     public DocumentType GetDocumentType(string fileName) =>
         DocumentType.Html;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogInformation("Parsing HTML document: {FileName}", fileName);
         var sw = Stopwatch.StartNew();
         try
         {
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Successfully parsed HTML {FileName} in {ElapsedMs}ms. Length: {Length}", 
@@ -45,6 +45,11 @@ public class HtmlDocumentParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.Html
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("HTML parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

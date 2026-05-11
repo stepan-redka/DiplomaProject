@@ -9,7 +9,6 @@ public class DocumentParsingService : IDocumentParsingService
 {
     private readonly IEnumerable<IDocumentParser> _parsers;
     private readonly ILogger<DocumentParsingService> _logger;
-    //orchestration service that selects the appropriate parser based on file type and handles fallback logic
 
     public DocumentParsingService(IEnumerable<IDocumentParser> parsers, ILogger<DocumentParsingService> logger)
     {
@@ -17,9 +16,8 @@ public class DocumentParsingService : IDocumentParsingService
         _logger = logger;
     }
 
-    public async Task<ParsedDocument> ParseDocumentAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseDocumentAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
-        // 1. Find a specialized parser (exclude the fallback one from initial check)
         var specializedParser = _parsers
             .Where(p => p is not FallbackTextParser)
             .FirstOrDefault(p => p.IsSupported(fileName));
@@ -27,17 +25,15 @@ public class DocumentParsingService : IDocumentParsingService
         if (specializedParser != null)
         {
             _logger.LogInformation("Using specialized parser {ParserType} for file {FileName}", specializedParser.GetType().Name, fileName);
-            return await specializedParser.ParseAsync(fileStream, fileName);
+            return await specializedParser.ParseAsync(fileStream, fileName, ct);
         }
 
-        // 2. Fallback to the safety parser
         var fallbackParser = _parsers.OfType<FallbackTextParser>().FirstOrDefault();
         if (fallbackParser != null)
         {
-            return await fallbackParser.ParseAsync(fileStream, fileName);
+            return await fallbackParser.ParseAsync(fileStream, fileName, ct);
         }
 
-        // 3. Absolute failure (should not happen if FallbackTextParser is registered)
         return new ParsedDocument
         {
             Success = false,

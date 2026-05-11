@@ -26,14 +26,14 @@ public class FallbackTextParser : IDocumentParser
 
     public DocumentType GetDocumentType(string fileName) => DocumentType.Unknown;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogWarning("Using fallback text parser for file: {FileName}. Content might be malformed if it's a binary format.", fileName);
         var sw = Stopwatch.StartNew();
         try
         {
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Successfully parsed file {FileName} using fallback in {ElapsedMs}ms. Length: {Length}", 
@@ -46,6 +46,11 @@ public class FallbackTextParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.Unknown
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Fallback parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

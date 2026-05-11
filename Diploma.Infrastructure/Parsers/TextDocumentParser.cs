@@ -23,14 +23,14 @@ public class TextDocumentParser : IDocumentParser
     public DocumentType GetDocumentType(string fileName) =>
         DocumentType.PlainText;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogInformation("Parsing text document: {FileName}", fileName);
         var sw = Stopwatch.StartNew();
         try
         {
             using var reader = new StreamReader(fileStream, Encoding.UTF8, true);
-            var content = await reader.ReadToEndAsync();
+            var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
             _logger.LogInformation("Successfully parsed text document {FileName} in {ElapsedMs}ms. Length: {Length}", 
@@ -43,6 +43,11 @@ public class TextDocumentParser : IDocumentParser
                 FileName = fileName,
                 Type = DocumentType.PlainText
             };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Text parsing canceled for {FileName}", fileName);
+            throw;
         }
         catch (Exception ex)
         {

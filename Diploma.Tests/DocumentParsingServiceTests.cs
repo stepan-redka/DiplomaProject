@@ -27,7 +27,7 @@ public class DocumentParsingServiceTests
         // Arrange
         var mockPdfParser = new Mock<IDocumentParser>();
         mockPdfParser.Setup(p => p.IsSupported("test.pdf")).Returns(true);
-        mockPdfParser.Setup(p => p.ParseAsync(It.IsAny<Stream>(), "test.pdf"))
+        mockPdfParser.Setup(p => p.ParseAsync(It.IsAny<Stream>(), "test.pdf", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ParsedDocument { Success = true, Content = "PDF Content" });
 
         var mockWordParser = new Mock<IDocumentParser>();
@@ -42,7 +42,7 @@ public class DocumentParsingServiceTests
         // Assert
         Assert.True(result.Success);
         Assert.Equal("PDF Content", result.Content);
-        mockPdfParser.Verify(p => p.ParseAsync(It.IsAny<Stream>(), "test.pdf"), Times.Once);
+        mockPdfParser.Verify(p => p.ParseAsync(It.IsAny<Stream>(), "test.pdf", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
