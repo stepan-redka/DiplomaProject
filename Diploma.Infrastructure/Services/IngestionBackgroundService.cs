@@ -1,8 +1,12 @@
 using Diploma.Application.Interfaces;
 using Diploma.Infrastructure.Services;
+using Diploma.Domain.Entities;
+using Diploma.Domain.Enums;
+using Diploma.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diploma.Infrastructure.Services;
 
@@ -30,45 +34,73 @@ public class IngestionBackgroundService : BackgroundService
     {
         _logger.LogInformation("Ingestion Background Service started.");
 
-        // ReadAllAsync handles the CancellationToken and yields when the channel is empty
         await foreach (var task in _channel.Reader.ReadAllAsync(stoppingToken))
         {
+            Guid documentId = Guid.NewGuid();
             try
             {
                 _logger.LogInformation("Background processing started for: {FileName} (User: {UserId})", task.FileName, task.UserId);
                 
                 using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 
-                // 1. Set the background user context for multi-tenancy
+                // 1. Create Initial Pending Record
+                var document = new Document
+                {
+                    Id = documentId,
+                    UserId = task.UserId,
+                    FileName = task.FileName,
+                    Status = IngestionStatus.Processing,
+                    CreatedAt = DateTime.UtcNow,
+                    Content = "[Processing...]"
+                };
+                dbContext.Documents.Add(document);
+                await dbContext.SaveChangesAsync(stoppingToken);
+
+                // 2. Set the background user context
                 var userService = scope.ServiceProvider.GetRequiredService<ICurrentUserService>() as CurrentUserService;
                 userService?.SetManualUserId(task.UserId);
 
                 var parsingService = scope.ServiceProvider.GetRequiredService<IDocumentParsingService>();
                 var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
 
-                // 2. Parse the document bytes
+                // 3. Parse the document bytes
                 using var stream = new MemoryStream(task.FileData);
                 var parsedDoc = await parsingService.ParseDocumentAsync(stream, task.FileName, stoppingToken);
 
                 if (parsedDoc.Success && !string.IsNullOrWhiteSpace(parsedDoc.Content))
                 {
-                    // 3. Ingest into RAG pipeline
+                    // Update content before RAG ingestion
+                    document.Content = parsedDoc.Content;
+                    await dbContext.SaveChangesAsync(stoppingToken);
+
+                    // 4. Ingest into RAG pipeline
                     await ragService.IngestDocumentAsync(parsedDoc.Content, task.FileName, stoppingToken);
                     _logger.LogInformation("Successfully background-indexed: {FileName}", task.FileName);
                 }
                 else
                 {
-                    _logger.LogWarning("Background parsing failed for {FileName}: {Error}", task.FileName, parsedDoc.ErrorMessage);
+                    throw new Exception(parsedDoc.ErrorMessage ?? "Unknown parsing error.");
                 }
             }
             catch (OperationCanceledException)
             {
-                // Graceful shutdown
                 break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Fatal error processing background task for {FileName}", task.FileName);
+                
+                // Persist failure to DB for Admin Telemetry
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var doc = await dbContext.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == documentId);
+                if (doc != null)
+                {
+                    doc.Status = IngestionStatus.Failed;
+                    doc.ErrorMessage = ex.Message;
+                    await dbContext.SaveChangesAsync();
+                }
             }
         }
 

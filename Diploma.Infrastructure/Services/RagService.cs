@@ -1,6 +1,7 @@
 using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
+using Diploma.Domain.Enums;
 using Diploma.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -95,6 +96,9 @@ public class RagService : IRagService
             // PERFORMANCE OPTIMIZATION: Use AddRange for batch addition
             _dbContext.DocumentChunks.AddRange(chunksToAdd);
 
+            // Update document status
+            document.Status = IngestionStatus.Success;
+
             await _dbContext.SaveChangesAsync(ct);
             _logger.LogDebug("Metadata and {ChunkCount} chunks saved to PostgreSQL.", chunksToAdd.Count);
 
@@ -146,13 +150,21 @@ public class RagService : IRagService
 
             _logger.LogDebug("Vector search returned {ResultCount} chunks.", results.Count);
 
+            // Fetch document names for source transparency
+            var docIds = results.Select(r => r.DocumentId).Distinct().ToList();
+            var docNames = await _dbContext.Documents
+                .Where(d => docIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.FileName, ct);
+
             var contextText = string.Join("\n---\n", results.Select(r => r.Content));
             var prompt = $"Context information is below.\n---------------------\n{contextText}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {question}\nAnswer: " ;
 
             var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
             
+            var assistantMessageId = Guid.NewGuid();
             _dbContext.ChatMessages.Add(new ChatMessage
             {
+                Id = assistantMessageId,
                 UserId = userId,
                 ChatSessionId = session.Id,
                 Role = "assistant",
@@ -166,11 +178,12 @@ public class RagService : IRagService
 
             return new QueryResponse 
             { 
+                MessageId = assistantMessageId,
                 Answer = answer,
-                Sources = results.Select(r => new RetrievedContext 
+                Sources = results.Select(r => new SourceCitation 
                 { 
                     Content = r.Content, 
-                    SourceDocument = "Vector DB Chunk", 
+                    SourceDocument = docNames.TryGetValue(r.DocumentId, out var name) ? name : "Unknown Source",
                     Score = r.Score 
                 }).ToList(),
                 ProcessingTimeMs = sw.ElapsedMilliseconds
@@ -196,11 +209,25 @@ public class RagService : IRagService
             .OrderBy(m => m.CreatedAt)
             .Select(m => new ChatMessageDto
             {
+                Id = m.Id,
                 Role = m.Role,
                 Content = m.Content,
-                CreatedAt = m.CreatedAt
+                CreatedAt = m.CreatedAt,
+                Effectiveness = (int)m.Effectiveness
             })
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> SetFeedbackAsync(Guid messageId, int effectiveness, CancellationToken ct = default)
+    {
+        var message = await _dbContext.ChatMessages
+            .FirstOrDefaultAsync(m => m.Id == messageId && m.UserId == userId, ct);
+
+        if (message == null) return false;
+
+        message.Effectiveness = (MessageEffectiveness)effectiveness;
+        await _dbContext.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default)
@@ -267,22 +294,18 @@ public class RagService : IRagService
         return chunksToDelete.Count;
     }
 
-    public async Task<bool> ClearCollectionAsync(CancellationToken ct = default)
+    public async Task<int> GetTotalQueriesAsync(CancellationToken ct = default)
     {
-        var myDocs = await _dbContext.Documents.ToListAsync(ct);
+        return await _dbContext.ChatMessages
+            .Where(m => m.UserId == userId && m.Role == "user")
+            .CountAsync(ct);
+    }
 
-        // PERFORMANCE OPTIMIZATION: Parallelize vector deletion per document
-        await Parallel.ForEachAsync(myDocs, new ParallelOptions 
-        { 
-            CancellationToken = ct, 
-            MaxDegreeOfParallelism = Environment.ProcessorCount 
-        }, async (doc, token) => 
-        {
-            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, doc.Id, userId, token);
-        });
-
-        _dbContext.Documents.RemoveRange(myDocs);
-        await _dbContext.SaveChangesAsync(ct);    
-        return true;
+    public async Task<long> GetStorageUsedAsync(CancellationToken ct = default)
+    {
+        // Estimate storage based on content length in characters (rough approx for enterprise feel)
+        return await _dbContext.Documents
+            .Where(d => d.UserId == userId)
+            .SumAsync(d => (long)d.Content.Length, ct);
     }
 }
