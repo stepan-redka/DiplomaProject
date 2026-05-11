@@ -1,5 +1,7 @@
 # RagSystem Orchestration Makefile
 
+COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+
 .PHONY: help up down status logs ollama-check build run
 
 help:
@@ -12,14 +14,18 @@ help:
 	@echo "  make run          - Run the Web application"
 
 up:
-	docker-compose up -d
-	@echo "Docker dependencies started."
+	@if [ "$$($(COMPOSE) ps --services --filter "status=running" | wc -l)" -ge 2 ]; then \
+		echo "Dependencies are already running."; \
+	else \
+		echo "Starting containers..."; \
+		$(COMPOSE) up -d || (echo "Compose failed. Attempting reset..." && $(COMPOSE) down && $(COMPOSE) up -d); \
+	fi
 
 down:
-	docker-compose down
+	$(COMPOSE) down
 
 status:
-	docker-compose ps
+	$(COMPOSE) ps
 	@echo "\nChecking Ollama..."
 	@curl -s http://localhost:11434/api/tags > /dev/null && echo "Ollama: RUNNING" || echo "Ollama: NOT RUNNING"
 
