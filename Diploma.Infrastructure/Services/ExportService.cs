@@ -31,7 +31,7 @@ public class ExportService : IExportService
                 page.Size(PageSizes.A4);
                 page.Margin(1, Unit.Inch);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(x => x.FontSize(11).FontFamily(Fonts.Helvetica));
+                page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Helvetica"));
 
                 page.Header().Row(row =>
                 {
