@@ -6,7 +6,9 @@ RagSystem is a robust Retrieval-Augmented Generation (RAG) platform developed us
 This system was developed as part of a Fourth-Year Diploma project titled: **"Research of approaches and capabilities of a RAG system for processing data of varying volume and types."**
 
 ### Core Research Features
-- **Scalable Ingestion Logic:** Support for batch document processing and manual text streams, enabling research into data volume impact on system performance.
+- **Asynchronous Background Ingestion:** Implementation of a high-throughput document processing pipeline using `System.Threading.Channels`. This decouples heavy parsing and indexing tasks from the web request cycle, ensuring high system responsiveness.
+- **Batch Embedding Optimization:** Integration of batch-processing capabilities for high-dimensional vector generation, significantly reducing latency compared to sequential processing.
+- **Scalable Ingestion Logic:** Support for large-scale document processing and manual text streams, enabling research into data volume impact on system performance.
 - **Heterogeneous Data Extraction:** Specialized parsing pipeline for PDF, DOCX, Markdown, HTML, and Plain Text formats.
 - **Dynamic Retrieval Tuning:** Real-time adjustment of the Top-K (Knowledge Depth) parameter to analyze the relationship between context density, response accuracy, and computational latency.
 
