@@ -15,6 +15,7 @@ wha# Gemini CLI: Coach Mode & Architectural Mandates
 - **Sprint Goal:** Production-ready system in 14 days.
 - **Progress Tracking:** Reference `info.txt` and the `GEMINI.md` status.
 - **Thesis Notes:** After completing a major architectural task, provide a "Thesis Note" (1-2 sentences in academic style) for the final report.
+- **Verification First:** NEVER commit or push changes immediately after applying a fix. Ffixes must be empirically verified by the user before receiving explicit instruction to commit or push.
 
 ## Current Status & Priorities (Day 12 of 14)
 1. **[DONE]** SQL Multi-tenant isolation (Global Query Filters).

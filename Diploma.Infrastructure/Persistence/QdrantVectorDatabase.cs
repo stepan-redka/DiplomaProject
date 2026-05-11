@@ -4,6 +4,7 @@ using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using Grpc.Core;
 
 namespace Diploma.Infrastructure.Persistence;
 
@@ -153,6 +154,11 @@ public class QdrantVectorDatabase : IVectorDatabase
                 Metadata = r.Payload.ToDictionary(p => p.Key, p => (object)p.Value.ToString())
             });
         }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            _logger.LogWarning("Qdrant collection {Collection} not found. Returning empty results.", collectionName);
+            return Enumerable.Empty<ScoredChunkDto>();
+        }
         catch (Exception ex)
         {
             sw.Stop();
@@ -180,6 +186,10 @@ public class QdrantVectorDatabase : IVectorDatabase
             _logger.LogInformation("Deleted vectors for document {DocumentId} and user {UserId} in {ElapsedMs}ms", 
                 documentId, userId, sw.ElapsedMilliseconds);
         }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            _logger.LogWarning("Qdrant collection {Collection} not found during document vector deletion. Skipping.", collectionName);
+        }
         catch (Exception ex)
         {
             sw.Stop();
@@ -203,6 +213,10 @@ public class QdrantVectorDatabase : IVectorDatabase
             sw.Stop();
             _logger.LogInformation("Deleted all vectors for user {UserId} in {ElapsedMs}ms", 
                 userId, sw.ElapsedMilliseconds);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            _logger.LogWarning("Qdrant collection {Collection} not found during user vector deletion. Skipping.", collectionName);
         }
         catch (Exception ex)
         {
