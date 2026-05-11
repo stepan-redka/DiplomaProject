@@ -23,19 +23,29 @@ public class QueryRequest
 /// </summary>
 public class QueryResponse
 {
+    public Guid MessageId { get; set; }
     public string Answer { get; set; } = string.Empty;
-    public List<RetrievedContext> Sources { get; set; } = new();
+    public List<SourceCitation> Sources { get; set; } = new();
     public double ProcessingTimeMs { get; set; }
 }
 
 /// <summary>
-/// Retrieved context from vector search
+/// Professional Source Citation DTO for transparency
 /// </summary>
-public class RetrievedContext
+public class SourceCitation
 {
     public string Content { get; set; } = string.Empty;
     public string SourceDocument { get; set; } = string.Empty;
     public double Score { get; set; }
+}
+
+/// <summary>
+/// Request to set user feedback on a message
+/// </summary>
+public class SetFeedbackRequest
+{
+    public Guid MessageId { get; set; }
+    public int Effectiveness { get; set; } // 0=Neutral, 1=Positive, 2=Negative
 }
 
 /// <summary>
@@ -89,7 +99,9 @@ public class DocumentDto
 
 public class ChatMessageDto
 {
+    public Guid Id { get; set; }
     public string Role { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public int Effectiveness { get; set; }
 }

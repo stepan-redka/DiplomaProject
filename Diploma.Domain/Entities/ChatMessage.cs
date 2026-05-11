@@ -1,4 +1,5 @@
 using Diploma.Domain.Interfaces;
+using Diploma.Domain.Enums;
 
 namespace Diploma.Domain.Entities;
 
@@ -24,6 +25,11 @@ public class ChatMessage : IMultiTenant
     public string Content { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
+    /// <summary>
+    /// User feedback on AI response quality
+    /// </summary>
+    public MessageEffectiveness Effectiveness { get; set; } = MessageEffectiveness.Neutral;
+
     /// <summary>
     /// For storing source citations/context used for this message
     /// </summary>

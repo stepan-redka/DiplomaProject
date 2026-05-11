@@ -20,6 +20,16 @@ public class Document : IMultiTenant
     public DocumentType Type { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Processing status for background ingestion
+    /// </summary>
+    public IngestionStatus Status { get; set; } = IngestionStatus.Pending;
+
+    /// <summary>
+    /// Detailed error if ingestion fails
+    /// </summary>
+    public string? ErrorMessage { get; set; }
     
     /// <summary>
     /// Navigation property to chunks
