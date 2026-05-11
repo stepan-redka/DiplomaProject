@@ -20,6 +20,7 @@ public class QdrantSettings
     public int Port { get; set; } = 6334;
     public string CollectionName { get; set; } = "documents";
     public int VectorSize { get; set; } = 768; // nomic-embed-text dimension
+    public int DefaultTopK { get; set; } = 3;
 }
 
 /// <summary>

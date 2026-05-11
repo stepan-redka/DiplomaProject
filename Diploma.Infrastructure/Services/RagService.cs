@@ -122,9 +122,9 @@ public class RagService : IRagService
         }
     }
 
-    public async Task<QueryResponse> QueryAsync(string question, int topK = 3, CancellationToken ct = default)
+    public async Task<QueryResponse> QueryAsync(string question, int? topK = null, QueryIntent? intent = null, CancellationToken ct = default)
     {
-        _logger.LogInformation("Executing RAG query: {Question}", question);
+        _logger.LogInformation("Executing RAG query: {Question} (Explicit Intent: {Intent})", question, intent?.ToString() ?? "None");
         var sw = Stopwatch.StartNew();
 
         try
@@ -145,8 +145,31 @@ public class RagService : IRagService
                 Content = question
             });
 
+            // --- LEVEL 0 OPTIMIZATION: EMPTY REPO CHECK ---
+            var docCount = await _dbContext.Documents.CountAsync(ct);
+            if (docCount == 0 && intent != QueryIntent.Research)
+            {
+                _logger.LogInformation("Zero-Document state detected. Routing directly to GENERAL path for: {Question}", question);
+                var emptyRepoPrompt = $"The user asked: '{question}'. Note: There are currently NO documents in their research repository. Answer their question to the best of your ability as a helpful research assistant, but keep the response concise.";
+                return await HandleGeneralQueryAsync(session, question, emptyRepoPrompt, sw, ct);
+            }
+
+            // --- LEVEL 1 OPTIMIZATION: SEMANTIC ROUTING / FAST-PATH ---
+            var resolvedIntent = intent ?? await ResolveIntentWithFastPathAsync(question, ct);
+
+            if (resolvedIntent == QueryIntent.General)
+            {
+                _logger.LogInformation("Router directed to GENERAL path for: {Question}", question);
+                var generalPrompt = $"The user asked: '{question}'. Provide a brief, professional response. If you are asked about the weather or general world facts, answer them to the best of your ability. Do not mention that you aren't searching a knowledge base.";
+                return await HandleGeneralQueryAsync(session, question, generalPrompt, sw, ct);
+            }
+
+            _logger.LogInformation("Router directed to RESEARCH path for: {Question}", question);
             var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question, ct);
-            var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, topK, ct)).ToList();
+            
+            // Apply dynamic retrieval depth
+            var k = topK ?? _config.Qdrant.DefaultTopK;
+            var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, k, ct)).ToList();
 
             _logger.LogDebug("Vector search returned {ResultCount} chunks.", results.Count);
 
@@ -204,6 +227,33 @@ public class RagService : IRagService
             _logger.LogError(ex, "Error during QueryAsync for question: {Question}", question);
             throw;
         }
+    }
+
+    private async Task<QueryResponse> HandleGeneralQueryAsync(ChatSession session, string question, string prompt, Stopwatch sw, CancellationToken ct)
+    {
+        var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
+        
+        var messageId = Guid.NewGuid();
+        _dbContext.ChatMessages.Add(new ChatMessage
+        {
+            Id = messageId,
+            UserId = userId,
+            ChatSessionId = session.Id,
+            Role = "assistant",
+            Content = answer
+        });
+        await _dbContext.SaveChangesAsync(ct);
+        
+        sw.Stop();
+        _logger.LogInformation("General query handled in {ElapsedMs}ms.", sw.ElapsedMilliseconds);
+        
+        return new QueryResponse 
+        { 
+            MessageId = messageId,
+            Answer = answer,
+            Sources = new List<SourceCitation>(),
+            ProcessingTimeMs = sw.ElapsedMilliseconds
+        };
     }
 
     public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default)
@@ -337,5 +387,47 @@ public class RagService : IRagService
         return await _dbContext.Documents
             .Where(d => d.UserId == userId)
             .SumAsync(d => (long)d.Content.Length, ct);
+    }
+
+    private async Task<QueryIntent> ResolveIntentWithFastPathAsync(string question, CancellationToken ct)
+    {
+        // FAST-PATH: Static analysis for greetings/small talk to save LLM tokens and time
+        var greetings = new[] { "hi", "hello", "hey", "thanks", "thank you", "good morning", "good evening", "who are you" };
+        var cleanQuestion = question.Trim().ToLower();
+        
+        if (greetings.Any(g => cleanQuestion.StartsWith(g) || cleanQuestion == g))
+        {
+            _logger.LogDebug("Fast-path: Detected GENERAL intent via static analysis.");
+            return QueryIntent.General;
+        }
+
+        return await GetQueryIntentAsync(question, ct);
+    }
+
+    private async Task<QueryIntent> GetQueryIntentAsync(string question, CancellationToken ct)
+    {
+        // THESIS NOTE: Using the LLM as a Semantic Router to minimize 
+        // infrastructure pressure on the Vector Database.
+        var intentPrompt = $"""
+            Analyze the user's query: '{question}'
+            Categorize it as either:
+            1. 'RESEARCH' - If it asks about facts, data, documents, or specific technical knowledge that would likely be in a repository.
+            2. 'GENERAL' - If it is a greeting, small talk, or a question about general world knowledge (like weather, basic facts).
+            
+            Respond ONLY with the word 'RESEARCH' or 'GENERAL'.
+            """;
+
+        try
+        {
+            var result = await _aiService.GenerateAnswerAsync(intentPrompt, ct);
+            return result.Contains("RESEARCH", StringComparison.OrdinalIgnoreCase) 
+                ? QueryIntent.Research 
+                : QueryIntent.General;
+        }
+        catch
+        {
+            // Fallback to Research to ensure we don't miss data if AI is flaky
+            return QueryIntent.Research;
+        }
     }
 }

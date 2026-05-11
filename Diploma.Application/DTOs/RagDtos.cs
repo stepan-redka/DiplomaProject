@@ -16,6 +16,7 @@ public class QueryRequest
 {
     public string Question { get; set; } = string.Empty;
     public int TopK { get; set; } = 3;
+    public Diploma.Domain.Enums.QueryIntent? Intent { get; set; }
 }
 
 /// <summary>
