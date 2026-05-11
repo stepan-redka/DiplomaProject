@@ -44,7 +44,11 @@ public class IngestionBackgroundService : BackgroundService
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 
-                // 1. Create Initial Pending Record
+                // 1. Set the background user context FIRST (Critical for Multi-tenant SaveChanges)
+                var userService = scope.ServiceProvider.GetRequiredService<ICurrentUserService>() as CurrentUserService;
+                userService?.SetManualUserId(task.UserId);
+
+                // 2. Create Initial Pending Record
                 var document = new Document
                 {
                     Id = documentId,
@@ -56,10 +60,6 @@ public class IngestionBackgroundService : BackgroundService
                 };
                 dbContext.Documents.Add(document);
                 await dbContext.SaveChangesAsync(stoppingToken);
-
-                // 2. Set the background user context
-                var userService = scope.ServiceProvider.GetRequiredService<ICurrentUserService>() as CurrentUserService;
-                userService?.SetManualUserId(task.UserId);
 
                 var parsingService = scope.ServiceProvider.GetRequiredService<IDocumentParsingService>();
                 var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
@@ -76,6 +76,10 @@ public class IngestionBackgroundService : BackgroundService
 
                     // 4. Ingest into RAG pipeline
                     await ragService.IngestDocumentAsync(parsedDoc.Content, task.FileName, stoppingToken);
+                    
+                    document.Status = IngestionStatus.Success;
+                    await dbContext.SaveChangesAsync(stoppingToken);
+                    
                     _logger.LogInformation("Successfully background-indexed: {FileName}", task.FileName);
                 }
                 else
