@@ -9,11 +9,9 @@ This system was developed as part of a Fourth-Year Diploma project titled: **"Re
 - **Frictionless Onboarding Model:** Implementation of a "Value-first" access strategy allowing anonymous guest users to interact with the RAG pipeline before formal registration. This minimizes the initial interaction cost and facilitates immediate research engagement.
 - **Guest Session Tracking:** Utilization of ephemeral session-based identifiers (`Guest-UUID`) to maintain stateful multi-tenant isolation for unauthenticated users without persistent database records.
 - **Identity Upsell Framework:** Contextual UI gating for private features (e.g., document uploads, chat history), providing a seamless transition from guest exploration to authenticated research.
-- **Asynchronous Background Ingestion:** Implementation of a high-throughput document processing pipeline using `System.Threading.Channels`. This decouples heavy parsing and indexing tasks from the web request cycle, ensuring high system responsiveness.
-- **Batch Embedding Optimization:** Integration of batch-processing capabilities for high-dimensional vector generation, significantly reducing latency compared to sequential processing.
-- **Scalable Ingestion Logic:** Support for large-scale document processing and manual text streams, enabling research into data volume impact on system performance.
-- **Heterogeneous Data Extraction:** Specialized parsing pipeline for PDF, DOCX, Markdown, HTML, and Plain Text formats.
+- **Hybrid Semantic Routing:** Implementation of a multi-tiered intent resolution strategy. This includes a low-latency "Fast-Path" heuristic for common interactions and an explicit "Research Mode" toggle, allowing the system to bypass expensive LLM-based classification and reduce overall pipeline latency.
 - **Dynamic Retrieval Tuning:** Real-time adjustment of the Top-K (Knowledge Depth) parameter to analyze the relationship between context density, response accuracy, and computational latency.
+- **Asynchronous Background Ingestion:** Implementation of a high-throughput document processing pipeline using `System.Threading.Channels`.
 
 ## Architecture and Methodology
 The platform adheres to the principles of Clean Architecture to ensure strict separation of concerns and maintainability. This architectural choice supports the research by allowing isolated testing of retrieval and generation components.
@@ -69,6 +67,7 @@ The system has been optimized to handle varying data volumes and types through t
 - **Parallel Processing:** Utilization of `Parallel.ForEachAsync` for bulk operations in the vector database.
 - **Batch Embedding:** Reduction of API overhead by grouping text chunks for embedding generation.
 - **Memory Optimization:** Integration of `Microsoft.IO.RecyclableMemoryStream` to minimize memory fragmentation during large document parsing.
+- **Hybrid Semantic Routing:** Optimization of the retrieval pipeline through dual-path intent resolution (Fast-Path heuristics vs. LLM-based routing), reducing latency for non-research queries.
 - **Payload Indexing:** Strategic indexing of user identifiers in the vector store to maintain low search latency across large datasets.
 
 ## Validation and Verification
