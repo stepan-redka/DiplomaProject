@@ -12,20 +12,27 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IRagService _ragService;
+    private readonly IChatHistoryService _chatHistoryService;
     private readonly ICurrentUserService _currentUserService;
 
-    public HomeController(ILogger<HomeController> logger, IRagService ragService, ICurrentUserService currentUserService)
+    public HomeController(
+        ILogger<HomeController> logger, 
+        IRagService ragService, 
+        IChatHistoryService chatHistoryService,
+        ICurrentUserService currentUserService)
     {
         _ragService = ragService;
+        _chatHistoryService = chatHistoryService;
         _logger = logger;
         _currentUserService = currentUserService;
     }
 
     [AllowAnonymous]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(Guid? sessionId = null)
     {
         try
         {
+            var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
             var documents = await _ragService.GetUserDocumentsAsync();
             
             var viewModel = new DashboardViewModel
@@ -33,21 +40,28 @@ public class HomeController : Controller
                 Documents = documents,
                 TotalDocuments = documents.Count,
                 TotalChunks = documents.Sum(d => d.ChunkCount),
-                IsAuthenticated = _currentUserService.IsAuthenticated
+                IsAuthenticated = isAuthenticated,
+                ActiveSessionId = sessionId,
+                UserName = User.Identity?.Name
             };
 
-            if (_currentUserService.IsAuthenticated)
+            if (isAuthenticated)
             {
                 viewModel.TotalQueries = await _ragService.GetTotalQueriesAsync();
                 var storageBytes = await _ragService.GetStorageUsedAsync();
+                viewModel.StorageUsedBytes = storageBytes;
                 viewModel.StorageUsedFormatted = StorageFormatter.FormatSize(storageBytes);
+                
+                // Load sidebar history
+                viewModel.RecentSessions = await _chatHistoryService.GetUserSessionsAsync();
+                viewModel.TotalSessions = viewModel.RecentSessions.Count;
             }
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading dashboard documents.");
+            _logger.LogError(ex, "Error loading dashboard.");
             return View(new DashboardViewModel());
         }
     }

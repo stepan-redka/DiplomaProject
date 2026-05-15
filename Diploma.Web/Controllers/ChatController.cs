@@ -10,17 +10,20 @@ public class ChatController : Controller
 {
     private readonly ILogger<ChatController> _logger;
     private readonly IRagService _ragService;
+    private readonly IChatHistoryService _chatHistoryService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IExportService _exportService;
 
     public ChatController(
         ILogger<ChatController> logger, 
         IRagService ragService, 
+        IChatHistoryService chatHistoryService,
         ICurrentUserService currentUserService,
         IExportService exportService)
     {
         _logger = logger;
         _ragService = ragService;
+        _chatHistoryService = chatHistoryService;
         _currentUserService = currentUserService;
         _exportService = exportService;
     }
@@ -33,13 +36,29 @@ public class ChatController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> GetSessionHistory(Guid sessionId)
+    {
+        if (!_currentUserService.IsAuthenticated) return Unauthorized();
+
+        try
+        {
+            var session = await _chatHistoryService.GetSessionDetailsAsync(sessionId);
+            if (session == null) return NotFound();
+
+            return Json(session);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving session history.");
+            return StatusCode(500, "Unable to load history.");
+        }
+    }
+
+    [HttpGet]
     public async Task<IActionResult> GetHistory()
     {
-        // History is only for authenticated users (Identity Upsell trigger point)
-        if (!_currentUserService.IsAuthenticated)
-        {
-            return Unauthorized();
-        }
+        // Legacy endpoint - redirecting or maintaining for basic history
+        if (!_currentUserService.IsAuthenticated) return Unauthorized();
 
         try
         {
@@ -64,19 +83,25 @@ public class ChatController : Controller
         }
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Processing RAG query (User: {UserId}). Length: {CharCount}", 
-            _currentUserService.UserId, request.Question.Length);
+        _logger.LogInformation("Processing RAG query (User: {UserId}). Session: {SessionId}, Model: {Model}, HighFidelity: {HighFidelity}", 
+            _currentUserService.UserId, request.SessionId, request.SelectedModel ?? "Default", request.IsHighFidelity);
 
         try
         {
-            var result = await _ragService.QueryAsync(request.Question, request.TopK, request.Intent);
+            var result = await _ragService.QueryAsync(
+                request.Question, 
+                request.SessionId, 
+                request.TopK, 
+                request.Intent, 
+                request.SelectedModel, 
+                request.IsHighFidelity);
             sw.Stop();
-
-            _logger.LogInformation("Query processed successfully in {ElapsedMs}ms", sw.ElapsedMilliseconds);
 
             return Json(new
             {
                 messageId = result.MessageId,
+                sessionId = result.SessionId,
+                sessionTitle = result.SessionTitle,
                 answer = result.Answer,
                 sources = result.Sources,
                 latencyMs = sw.ElapsedMilliseconds,
@@ -86,10 +111,22 @@ public class ChatController : Controller
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to process RAG query after {ElapsedMs}ms. Question: {Question}", 
-                sw.ElapsedMilliseconds, request.Question);
+            _logger.LogError(ex, "Failed to process RAG query.");
             return StatusCode(500, "An error occurred while communicating with the AI service.");
         }
+    }
+
+    [HttpPost]
+    [Authorize]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteSession(Guid id)
+    {
+        var result = await _chatHistoryService.DeleteSessionAsync(id);
+        if (result)
+        {
+            return Ok();
+        }
+        return BadRequest("Failed to delete session.");
     }
 
     [HttpPost]
@@ -114,38 +151,50 @@ public class ChatController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> ExportSession(string format = "pdf")
+    public async Task<IActionResult> ExportSession(Guid sessionId, string format = "pdf")
     {
         if (!_currentUserService.IsAuthenticated) return Unauthorized();
 
+        if (sessionId == Guid.Empty)
+        {
+            return BadRequest("A valid session must be selected to export findings.");
+        }
+
         try
         {
-            var history = await _ragService.GetChatHistoryAsync(limit: 1000);
-            
+            var session = await _chatHistoryService.GetSessionDetailsAsync(sessionId);
+            if (session == null) return NotFound("The requested research session could not be found.");
+
+            // Prevent export of empty sessions
+            if (session.Messages == null || !session.Messages.Any(m => m.Content.Length >= 15))
+            {
+                return BadRequest("This research thread is currently empty or contains insufficient data for synthesis. Please conduct further research before exporting.");
+            }
+
             byte[] fileBytes;
             string contentType;
             string fileName;
 
             if (format.ToLower() == "json")
             {
-                fileBytes = _exportService.ExportChatHistoryAsJson(history);
+                fileBytes = _exportService.ExportChatHistoryAsJson(session.Messages);
                 contentType = "application/json";
-                fileName = _exportService.GetExportFileName("json");
+                fileName = _exportService.GetExportFileName("json", session.Title);
             }
             else
             {
-                var userName = User.Identity?.Name ?? "Researcher";
-                fileBytes = _exportService.ExportChatHistoryAsPdf(history, userName);
+                var userEmail = User.Identity?.Name ?? "Researcher";
+                fileBytes = _exportService.ExportSessionAsPdf(session, userEmail);
                 contentType = "application/pdf";
-                fileName = _exportService.GetExportFileName("pdf");
+                fileName = _exportService.GetExportFileName("pdf", session.Title);
             }
 
             return File(fileBytes, contentType, fileName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error exporting chat session.");
-            return StatusCode(500, "An error occurred during export.");
+            _logger.LogError(ex, "Error exporting chat session: {SessionId}", sessionId);
+            return StatusCode(500, "An internal error occurred during synthesis generation.");
         }
     }
-}
+    }

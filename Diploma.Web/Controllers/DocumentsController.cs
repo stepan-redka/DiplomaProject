@@ -109,6 +109,18 @@ public class DocumentsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var result = await _ragService.DeleteDocumentAsync(id);
+        if (result)
+        {
+            return Ok();
+        }
+        return BadRequest("Failed to delete document.");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ClearCollection()
     {
         var result = await _ragService.ClearCollectionAsync();

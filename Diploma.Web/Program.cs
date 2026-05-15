@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 using Microsoft.IO;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,10 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>(options => options.Sign
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+// --- DATA PROTECTION PERSISTENCE ---
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<ApplicationDbContext>();
+
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
 
@@ -56,6 +61,8 @@ builder.Services.AddScoped<IDocumentParser, MarkdownDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, HtmlDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, LatexDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, CodeDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, CsvDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, ExcelDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, FallbackTextParser>();
 
 builder.Services.AddScoped<IVectorDatabase, QdrantVectorDatabase>();
@@ -65,6 +72,15 @@ builder.Services.AddScoped<IRagService, RagService>();
 builder.Services.AddScoped<IChatHistoryService, ChatHistoryService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<IHealthService, HealthService>();
+
+// Register Specialized RAG Services
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+builder.Services.AddScoped<IIntentResolver, IntentResolver>();
+builder.Services.AddSingleton<IPromptRegistry, PromptRegistry>();
+builder.Services.AddScoped<IEvaluationService, EvaluationService>();
+builder.Services.AddSingleton<ITokenizerService, TokenizerService>();
+builder.Services.AddScoped<IRetrievalService, RetrievalService>();
+builder.Services.AddScoped<IDocumentService, DocumentService>();
 
 // Register Document Parsing Orchestrator
 builder.Services.AddScoped<IDocumentParsingService, DocumentParsingService>();
