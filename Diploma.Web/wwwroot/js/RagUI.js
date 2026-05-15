@@ -149,6 +149,16 @@ class RagUI {
         const aside = document.querySelector('aside');
         if (aside) {
             aside.onclick = (e) => {
+                // Home/Research Desk link
+                const homeLink = e.target.closest('a[href="/"]');
+                if (homeLink) {
+                    e.preventDefault();
+                    this.currentSessionId = null;
+                    window.history.pushState({}, '', '/');
+                    this.switchView('chat');
+                    return;
+                }
+
                 // Session Links
                 const sessionLink = e.target.closest('a[href*="sessionId="]');
                 if (sessionLink && !e.target.closest('button')) {
@@ -167,18 +177,29 @@ class RagUI {
     }
 
     async switchView(viewName) {
+        const isChat = viewName.toLowerCase() === 'chat';
         this.activeView = viewName.toLowerCase();
-        this.showLoading(true);
         
-        // Hide Chat Input for non-chat views
+        // Toggle Chat Input visibility
         const inputContainer = this.chatInput?.closest('.p-8.border-t');
-        if (inputContainer) inputContainer.classList.add('hidden');
+        if (inputContainer) {
+            inputContainer.classList.toggle('hidden', !isChat);
+        }
 
         // Deactivate all interactive links
         document.querySelectorAll('aside nav a, header .lab-link').forEach(a => {
-            a.classList.remove('bg-zinc-100', 'dark:bg-zinc-900/50', 'border-zinc-200', 'dark:border-zinc-800', 'shadow-sm', 'text-zinc-900', 'dark:text-white', 'bg-zinc-200', 'dark:bg-zinc-800', 'text-indigo-600', 'bg-indigo-500/5', 'dark:text-indigo-400');
+            a.classList.remove('bg-zinc-100', 'dark:bg-zinc-900/50', 'border-zinc-200', 'dark:border-zinc-800', 'shadow-sm', 'text-zinc-900', 'dark:text-white', 'bg-zinc-200', 'dark:bg-zinc-800', 'text-indigo-600', 'bg-indigo-500/5', 'dark:text-indigo-400', 'shadow-inner');
         });
 
+        if (isChat) {
+            await this.loadChatHistory();
+            // Mark home link as active
+            const homeLink = document.querySelector('aside a[href="/"]');
+            if (homeLink) homeLink.classList.add('text-indigo-600', 'bg-indigo-500/5', 'shadow-inner');
+            return;
+        }
+
+        this.showLoading(true);
         try {
             const html = await this.client.getLabView(viewName);
             this.chatWindow.innerHTML = `<div class="py-12 animate-in fade-in duration-500">${html}</div>`;
@@ -202,6 +223,7 @@ class RagUI {
             if (window.lucide) lucide.createIcons({ root: this.chatWindow });
         } catch (error) {
             console.error(error);
+            this.chatWindow.innerHTML = `<div class="p-12 text-center text-red-500 font-mono text-xs">ERR_VIEW_LOAD_FAILED: ${error.message}</div>`;
         } finally {
             this.showLoading(false);
         }
