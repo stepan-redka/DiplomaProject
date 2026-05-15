@@ -3,50 +3,50 @@
     ViewData["Title"] = "Log in";
 }
 
-<div class="min-h-screen flex items-center justify-center p-4">
+<div class="min-h-screen flex items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
     <div class="w-full max-w-md space-y-8 fade-in">
         <div class="text-center">
-            <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                <i data-lucide="lock" class="w-6 h-6 text-black"></i>
+            <div class="w-12 h-12 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-6 shadow-sm dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                <i data-lucide="lock" class="w-6 h-6 text-zinc-900 dark:text-white"></i>
             </div>
-            <h2 class="text-2xl font-bold tracking-tight text-white">Welcome Back</h2>
+            <h2 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Welcome Back</h2>
             <p class="mt-2 text-sm text-zinc-500 tracking-tight font-medium">Access your personal knowledge base</p>
         </div>
 
-        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl relative">
-            <div class="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none rounded-2xl"></div>
+        <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 shadow-xl dark:shadow-2xl relative">
+            <div class="absolute inset-0 bg-gradient-to-b from-zinc-500/[0.02] dark:from-white/[0.02] to-transparent pointer-events-none rounded-2xl"></div>
             
             <form asp-controller="Account" asp-action="Login" method="post" class="space-y-6 relative z-10">
-                <div asp-validation-summary="All" class="text-red-400 text-[10px] font-bold uppercase tracking-widest list-none"></div>
+                <div asp-validation-summary="All" class="text-red-500 text-[10px] font-bold uppercase tracking-widest list-none"></div>
                 
                 <div class="space-y-2">
-                    <label asp-for="Email" class="text-[10px] uppercase font-bold text-zinc-500 tracking-widest ml-1"></label>
-                    <input asp-for="Email" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder:text-zinc-800" placeholder="name@example.com" />
-                    <span asp-validation-for="Email" class="text-red-400 text-[9px] font-bold uppercase tracking-tighter"></span>
+                    <label asp-for="Email" class="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 tracking-widest ml-1"></label>
+                    <input asp-for="Email" class="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3.5 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-indigo-500 dark:focus:border-zinc-500 transition-colors placeholder:text-zinc-300 dark:placeholder:text-zinc-800" placeholder="name@example.com" />
+                    <span asp-validation-for="Email" class="text-red-500 text-[9px] font-bold uppercase tracking-tighter"></span>
                 </div>
                 
                 <div class="space-y-2">
-                    <label asp-for="Password" class="text-[10px] uppercase font-bold text-zinc-500 tracking-widest ml-1"></label>
-                    <input asp-for="Password" type="password" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors placeholder:text-zinc-800" placeholder="••••••••" />
-                    <span asp-validation-for="Password" class="text-red-400 text-[9px] font-bold uppercase tracking-tighter"></span>
+                    <label asp-for="Password" class="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 tracking-widest ml-1"></label>
+                    <input asp-for="Password" type="password" class="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3.5 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-indigo-500 dark:focus:border-zinc-500 transition-colors placeholder:text-zinc-300 dark:placeholder:text-zinc-800" placeholder="••••••••" />
+                    <span asp-validation-for="Password" class="text-red-500 text-[9px] font-bold uppercase tracking-tighter"></span>
                 </div>
                 
                 <div class="flex items-center justify-between px-1">
                     <label class="flex items-center gap-2 cursor-pointer group">
-                        <input asp-for="RememberMe" class="w-4 h-4 bg-zinc-950 border-zinc-800 rounded text-white focus:ring-0 focus:ring-offset-0" />
-                        <span class="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">Remember me</span>
+                        <input asp-for="RememberMe" class="w-4 h-4 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 rounded text-indigo-600 focus:ring-0 focus:ring-offset-0" />
+                        <span class="text-xs text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300 transition-colors">Remember me</span>
                     </label>
                 </div>
                 
-                <button type="submit" class="w-full bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-[0.15em] py-4 rounded-xl transition-all shadow-[0_4px_12px_rgba(255,255,255,0.1)] active:scale-[0.98]">
+                <button type="submit" class="w-full bg-indigo-600 dark:bg-white hover:bg-indigo-700 dark:hover:bg-zinc-200 text-white dark:text-black font-bold text-xs uppercase tracking-[0.15em] py-4 rounded-xl transition-all shadow-lg active:scale-[0.98]">
                     Sign In
                 </button>
             </form>
         </div>
 
-        <p class="text-center text-[11px] text-zinc-600 uppercase tracking-widest font-bold">
+        <p class="text-center text-[11px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest font-bold">
             Don't have an account? 
-            <a asp-action="Register" class="text-zinc-300 hover:text-white transition-colors underline underline-offset-4">Register here</a>
+            <a asp-action="Register" class="text-zinc-900 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-white transition-colors underline underline-offset-4">Register here</a>
         </p>
     </div>
 </div>
