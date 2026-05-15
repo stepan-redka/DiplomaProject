@@ -98,9 +98,9 @@
                                                 @(user.IsLockedOut ? "Activate" : "Deactivate")
                                             </button>
                                         </form>
-                                        <form asp-action="WipeUserVectors" method="post" class="inline" onsubmit="return confirm('CRITICAL ACTION: Wipe all vector memory for this user?')">
+                                        <form asp-action="WipeUserVectors" method="post" class="inline">
                                             <input type="hidden" name="userId" value="@user.UserId" />
-                                            <button type="submit" class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-bold uppercase hover:bg-red-500/20 transition-colors">
+                                            <button type="button" onclick="window.confirmAction(this.parentElement, 'Purge Vector Memory', 'CRITICAL ACTION: Wipe all vector memory for this user? This action is irreversible.')" class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-bold uppercase hover:bg-red-500/20 transition-colors">
                                                 Purge Vectors
                                             </button>
                                         </form>

@@ -163,9 +163,9 @@
                                     <span>Logout Scientist</span>
                                 </button>
                             </form>
-                            <form asp-controller="Account" asp-action="DeleteAccount" method="post" onsubmit="return confirm('CRITICAL: Purge all research data and destroy identity profile? This action is IRREVERSIBLE.')" class="w-full">
+                            <form asp-controller="Account" asp-action="DeleteAccount" method="post" class="w-full">
                                 @Html.AntiForgeryToken()
-                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-red-500/60 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 transition-all text-left uppercase tracking-tight">
+                                <button type="button" onclick="window.confirmAction(this.parentElement, 'Terminate Account', 'CRITICAL: Purge all research data and destroy identity profile? This action is IRREVERSIBLE.')" class="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-red-500/60 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 transition-all text-left uppercase tracking-tight">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                     <span>Terminate Account</span>
                                 </button>
