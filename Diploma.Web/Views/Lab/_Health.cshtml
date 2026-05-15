@@ -1,0 +1,112 @@
+@model Diploma.Application.DTOs.SystemHealthDto
+
+<div class="max-w-4xl mx-auto space-y-12 fade-in">
+    <div class="space-y-2">
+        <h2 class="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Infrastructure Telemetry</h2>
+        <p class="text-sm text-zinc-500">Real-time status of critical RAG ecosystem components.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- PostgreSQL -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <i data-lucide="database" class="w-4 h-4 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <span class="px-2 py-0.5 rounded-full @(Model.Database.IsHealthy ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-red-500/10 text-red-600 dark:text-red-500") text-[8px] font-bold uppercase tracking-widest">
+                    @(Model.Database.IsHealthy ? "Active" : "Error")
+                </span>
+            </div>
+            <div class="space-y-1">
+                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">PostgreSQL</h4>
+                <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.Database.LatencyMs ms</p>
+            </div>
+        </div>
+
+        <!-- Qdrant -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+                <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                    <i data-lucide="box" class="w-4 h-4 text-red-600 dark:text-red-400"></i>
+                </div>
+                <span class="px-2 py-0.5 rounded-full @(Model.VectorDb.IsHealthy ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-red-500/10 text-red-600 dark:text-red-500") text-[8px] font-bold uppercase tracking-widest">
+                    @(Model.VectorDb.IsHealthy ? "Active" : "Error")
+                </span>
+            </div>
+            <div class="space-y-1">
+                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Qdrant</h4>
+                <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.VectorDb.LatencyMs ms</p>
+            </div>
+        </div>
+
+        <!-- AI Service -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+                <div class="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <i data-lucide="cpu" class="w-4 h-4 text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <span class="px-2 py-0.5 rounded-full @(Model.AiService.IsHealthy ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-red-500/10 text-red-600 dark:text-red-500") text-[8px] font-bold uppercase tracking-widest">
+                    @(Model.AiService.IsHealthy ? "Active" : "Error")
+                </span>
+            </div>
+            <div class="space-y-1">
+                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">AI Provider</h4>
+                <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.AiService.LatencyMs ms</p>
+            </div>
+        </div>
+
+        <!-- Host Server -->
+        <div class="p-6 rounded-2xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                    <i data-lucide="server" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-[8px] font-bold uppercase tracking-widest">
+                    Nominal
+                </span>
+            </div>
+            <div class="space-y-2">
+                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Host Server</h4>
+                <div class="grid grid-cols-2 gap-2 font-mono text-[9px]">
+                    <div class="flex flex-col">
+                        <span class="text-zinc-400">CPU</span>
+                        <span class="text-zinc-600 dark:text-zinc-300">@Model.HostServer.CpuLoadPercentage%</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-zinc-400">RAM</span>
+                        <span class="text-zinc-600 dark:text-zinc-300">@Model.HostServer.RamUsedGb GB</span>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-[9px] font-mono pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                    <span class="text-zinc-400 uppercase">Disk I/O</span>
+                    <span class="text-indigo-500">@Model.HostServer.DiskIoStatus</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.IsHealthy)
+    {
+        <div class="p-8 rounded-3xl bg-emerald-600/5 border border-emerald-500/10 space-y-4">
+            <div class="flex items-center gap-4">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-500">All Systems Nominal</span>
+            </div>
+            <p class="text-[11px] text-zinc-500 leading-relaxed max-w-2xl">The research environment is currently operating at optimal efficiency. Multi-tenant isolation is enforced at the database level via Global Query Filters and at the vector level via payload partitioning.</p>
+        </div>
+    }
+    else
+    {
+        <div class="p-8 rounded-3xl bg-red-600/5 border border-red-500/10 space-y-4">
+            <div class="flex items-center gap-4">
+                <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-red-600 dark:text-red-500">Service Degradation Detected</span>
+            </div>
+            <p class="text-[11px] text-zinc-500 leading-relaxed max-w-2xl">One or more critical subsystems are experiencing latency or connectivity issues. High-fidelity synthesis may be impacted.</p>
+        </div>
+    }
+</div>
+
+<script>
+    if (window.lucide) lucide.createIcons();
+</script>
