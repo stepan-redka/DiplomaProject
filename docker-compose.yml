@@ -6,6 +6,10 @@ services:
     container_name: ragsystem-web
     ports:
       - "5000:8080"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
     environment:
       - ConnectionStrings__DefaultConnection=Host=ragsystem-postgres;Port=5432;Database=RagSystem;Username=postgres;Password=postgres
       - RagConfiguration__Qdrant__Host=ragsystem-qdrant
