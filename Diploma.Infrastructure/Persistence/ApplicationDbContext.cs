@@ -3,11 +3,12 @@ using Diploma.Domain.Interfaces;
 using Diploma.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace Diploma.Infrastructure.Persistence;
 
-public class ApplicationDbContext : IdentityDbContext
+public class ApplicationDbContext : IdentityDbContext, IDataProtectionKeyContext
 {
     private readonly ICurrentUserService _currentUserService;
 
@@ -21,10 +22,17 @@ public class ApplicationDbContext : IdentityDbContext
     public DbSet<DocumentChunk> DocumentChunks { get; set; } = null!;
     public DbSet<ChatSession> ChatSessions { get; set; } = null!;
     public DbSet<ChatMessage> ChatMessages { get; set; } = null!;
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // --- Data Protection Key Configuration (Excluded from Multi-tenancy) ---
+        builder.Entity<DataProtectionKey>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+        });
 
         // --- Document Configuration ---
         builder.Entity<Document>(entity =>
