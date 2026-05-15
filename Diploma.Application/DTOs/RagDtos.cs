@@ -15,8 +15,10 @@ public class IngestRequest
 public class QueryRequest
 {
     public string Question { get; set; } = string.Empty;
+    public Guid? SessionId { get; set; }
     public int TopK { get; set; } = 3;
     public Diploma.Domain.Enums.QueryIntent? Intent { get; set; }
+    public string? SelectedModel { get; set; }
 }
 
 /// <summary>
@@ -25,6 +27,8 @@ public class QueryRequest
 public class QueryResponse
 {
     public Guid MessageId { get; set; }
+    public Guid SessionId { get; set; }
+    public string? SessionTitle { get; set; }
     public string Answer { get; set; } = string.Empty;
     public List<SourceCitation> Sources { get; set; } = new();
     public double ProcessingTimeMs { get; set; }
@@ -96,6 +100,8 @@ public class DocumentDto
     public string FileName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public int ChunkCount { get; set; }
+    public long FileSizeBytes { get; set; }
+    public double ProcessingTimeMs { get; set; }
 }
 
 public class ChatMessageDto
@@ -105,4 +111,20 @@ public class ChatMessageDto
     public string Content { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public int Effectiveness { get; set; }
+    public List<SourceCitation> Sources { get; set; } = new();
+
+    /// <summary>
+    /// The AI model used for this message
+    /// </summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>
+    /// Generation time in milliseconds
+    /// </summary>
+    public double ProcessingTimeMs { get; set; }
+
+    /// <summary>
+    /// Estimated or actual token count
+    /// </summary>
+    public int TokenCount { get; set; }
 }

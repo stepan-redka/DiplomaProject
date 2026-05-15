@@ -30,6 +30,16 @@ public class Document : IMultiTenant
     /// Detailed error if ingestion fails
     /// </summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Time taken to parse and ingest the document in milliseconds.
+    /// </summary>
+    public double ProcessingTimeMs { get; set; }
+
+    /// <summary>
+    /// Actual file size in bytes.
+    /// </summary>
+    public long FileSizeBytes { get; set; }
     
     /// <summary>
     /// Navigation property to chunks

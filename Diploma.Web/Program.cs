@@ -43,6 +43,10 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>(options => options.Sign
     .AddDefaultTokenProviders();
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpClient();
+
+// Enable AJAX support for Antiforgery
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 
 // Register Document Parsers
 builder.Services.AddScoped<IDocumentParser, PdfDocumentParser>();
@@ -51,12 +55,14 @@ builder.Services.AddScoped<IDocumentParser, TextDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, MarkdownDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, HtmlDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, LatexDocumentParser>();
+builder.Services.AddScoped<IDocumentParser, CodeDocumentParser>();
 builder.Services.AddScoped<IDocumentParser, FallbackTextParser>();
 
 builder.Services.AddScoped<IVectorDatabase, QdrantVectorDatabase>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<ITextChunkingService, TextChunkingService>();
 builder.Services.AddScoped<IRagService, RagService>();
+builder.Services.AddScoped<IChatHistoryService, ChatHistoryService>();
 builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<IHealthService, HealthService>();
 
@@ -81,6 +87,25 @@ builder.Services.AddHostedService<IngestionBackgroundService>();
 
 var app = builder.Build();
 
+// --- DATABASE MIGRATIONS ON STARTUP ---
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        if (context.Database.IsRelational())
+        {
+            context.Database.Migrate();
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating the database.");
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
@@ -94,10 +119,10 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseSession();
+
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.UseSession();
 
 app.MapControllerRoute(
     name: "default",

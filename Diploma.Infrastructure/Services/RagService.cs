@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Document = Diploma.Domain.Entities.Document;
 
 namespace Diploma.Infrastructure.Services;
@@ -57,12 +58,12 @@ public class RagService : IRagService
                 UserId = userId,
                 FileName = documentName,
                 CreatedAt = DateTime.UtcNow,
-                Content = content
+                Content = content,
+                FileSizeBytes = System.Text.Encoding.UTF8.GetByteCount(content)
             };
             _dbContext.Documents.Add(document);
 
             // PERFORMANCE OPTIMIZATION: Use Batch Embedding Generation
-            // This is MUCH faster than individual calls in a loop
             var embeddings = await _aiService.GetTextEmbeddingsAsync(textChunks, ct);
             
             var vectorDataList = new List<VectorData>();
@@ -93,19 +94,18 @@ public class RagService : IRagService
                 });
             }
 
-            // PERFORMANCE OPTIMIZATION: Use AddRange for batch addition
             _dbContext.DocumentChunks.AddRange(chunksToAdd);
-
-            // Update document status
             document.Status = IngestionStatus.Success;
 
             await _dbContext.SaveChangesAsync(ct);
-            _logger.LogDebug("Metadata and {ChunkCount} chunks saved to PostgreSQL.", chunksToAdd.Count);
 
             await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize, ct);
             await _vectorDb.UpsertChunksAsync(_config.Qdrant.CollectionName, vectorDataList, userId, ct);
             
             sw.Stop();
+            document.ProcessingTimeMs = sw.ElapsedMilliseconds;
+            await _dbContext.SaveChangesAsync(ct);
+            
             _logger.LogInformation("Successfully ingested {DocumentName} in {ElapsedMs}ms.", documentName, sw.ElapsedMilliseconds);
 
             return new IngestResponse { Success = true, ChunksCreated = textChunks.Count, Message = "Success!" }; 
@@ -122,19 +122,42 @@ public class RagService : IRagService
         }
     }
 
-    public async Task<QueryResponse> QueryAsync(string question, int? topK = null, QueryIntent? intent = null, CancellationToken ct = default)
+    public async Task<QueryResponse> QueryAsync(string question, Guid? sessionId = null, int? topK = null, QueryIntent? intent = null, string? modelName = null, CancellationToken ct = default)
     {
-        _logger.LogInformation("Executing RAG query: {Question} (Explicit Intent: {Intent})", question, intent?.ToString() ?? "None");
+        _logger.LogInformation("Executing RAG query: {Question} (Explicit Intent: {Intent}, Model: {Model})", 
+            question, intent?.ToString() ?? "None", modelName ?? "Default");
         var sw = Stopwatch.StartNew();
 
         try
         {
-            var session = await _dbContext.ChatSessions.FirstOrDefaultAsync(ct);
+            ChatSession? session = null;
+            if (sessionId.HasValue)
+            {
+                session = await _dbContext.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId.Value, ct);
+            }
+
             if (session == null)
             {
-                session = new ChatSession { UserId = userId, Title = "Default Chat" };
+                var title = question.Length > 30 ? question.Substring(0, 27) + "..." : question;
+                session = new ChatSession 
+                { 
+                    UserId = userId, 
+                    Title = title,
+                    RelatedDocumentIds = await _dbContext.Documents.Select(d => d.Id).ToListAsync(ct),
+                    SelectedModel = modelName
+                };
                 _dbContext.ChatSessions.Add(session);
                 await _dbContext.SaveChangesAsync(ct);
+            }
+            else
+            {
+                session.LastUpdatedAt = DateTime.UtcNow;
+                // Update model if changed/specified
+                if (!string.IsNullOrEmpty(modelName) && session.SelectedModel != modelName)
+                {
+                    session.SelectedModel = modelName;
+                    await _dbContext.SaveChangesAsync(ct);
+                }
             }
 
             _dbContext.ChatMessages.Add(new ChatMessage
@@ -151,27 +174,40 @@ public class RagService : IRagService
             {
                 _logger.LogInformation("Zero-Document state detected. Routing directly to GENERAL path for: {Question}", question);
                 var emptyRepoPrompt = $"The user asked: '{question}'. Note: There are currently NO documents in their research repository. Answer their question to the best of your ability as a helpful research assistant, but keep the response concise.";
-                return await HandleGeneralQueryAsync(session, question, emptyRepoPrompt, sw, ct);
+                return await HandleGeneralQueryAsync(session, question, emptyRepoPrompt, sw, modelName, ct);
             }
 
             // --- LEVEL 1 OPTIMIZATION: SEMANTIC ROUTING / FAST-PATH ---
-            var resolvedIntent = intent ?? await ResolveIntentWithFastPathAsync(question, ct);
+            // Use Fast-Path to detect greetings even if intent is Research to prevent irrelevant context binding
+            var detectedIntent = await ResolveIntentWithFastPathAsync(question, ct);
+            
+            // If Research Mode is ON, we are very biased toward Research path unless it's a confirmed simple greeting
+            var resolvedIntent = (intent == QueryIntent.Research && !IsSimpleGreeting(question))
+                ? QueryIntent.Research
+                : detectedIntent;
 
             if (resolvedIntent == QueryIntent.General)
             {
                 _logger.LogInformation("Router directed to GENERAL path for: {Question}", question);
-                var generalPrompt = $"The user asked: '{question}'. Provide a brief, professional response. If you are asked about the weather or general world facts, answer them to the best of your ability. Do not mention that you aren't searching a knowledge base.";
-                return await HandleGeneralQueryAsync(session, question, generalPrompt, sw, ct);
+                var generalPrompt = $"The user asked: '{question}'. You are a professional AI research assistant. Respond naturally and concisely. If it's a greeting, acknowledge it politely and ask how you can assist with their research repository. Do not mention searching a database.";
+                return await HandleGeneralQueryAsync(session, question, generalPrompt, sw, modelName, ct);
             }
 
             _logger.LogInformation("Router directed to RESEARCH path for: {Question}", question);
             var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question, ct);
             
-            // Apply dynamic retrieval depth
+            // Apply dynamic retrieval depth and similarity thresholding
             var k = topK ?? _config.Qdrant.DefaultTopK;
-            var results = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, k, ct)).ToList();
+            var searchResults = (await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, k, ct)).ToList();
+            
+            // RELEVANCE GATING: Filter results by threshold to prevent "hallucinated binding"
+            // We use the raw score for filtering, but will normalize it for the UI
+            var results = searchResults
+                .Where(r => r.Score >= _config.Qdrant.SimilarityThreshold)
+                .ToList();
 
-            _logger.LogDebug("Vector search returned {ResultCount} chunks.", results.Count);
+            _logger.LogDebug("Vector search returned {TotalCount} chunks. {FilteredCount} passed threshold {Threshold}.", 
+                searchResults.Count, results.Count, _config.Qdrant.SimilarityThreshold);
 
             // Fetch document names for source transparency
             var docIds = results.Select(r => r.DocumentId).Distinct().ToList();
@@ -180,23 +216,57 @@ public class RagService : IRagService
                 .ToDictionaryAsync(d => d.Id, d => d.FileName, ct);
 
             var contextText = results.Any() 
-                ? string.Join("\n---\n", results.Select(r => r.Content)) 
-                : "No relevant documents found in the database.";
+                ? string.Join("\n---\n", results.Select(r => $"[Source: {docNames.GetValueOrDefault(r.DocumentId, "Unknown")}] {r.Content}")) 
+                : "No relevant documents found.";
             
             var prompt = results.Any()
-                ? $"Context information is below.\n---------------------\n{contextText}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {question}\nAnswer: "
-                : $"The user asked: '{question}'. Currently, there are no relevant documents in the search index to provide a grounded answer. Please inform the user that you don't have enough specific context to answer this based on the repository, but offer general information if appropriate, while maintaining a research-focused tone.";
+                ? $"""
+                  You are a professional research assistant. Use the following pieces of retrieved context to answer the user's question.
+                  If you don't know the answer based on the context, state that the repository doesn't have specific data, then provide a general answer if possible but CLEARLY distinguish it.
+                  Always prefer information from the context.
+                  
+                  CONTEXT:
+                  ---------------------
+                  {contextText}
+                  ---------------------
+                  
+                  QUERY: {question}
+                  
+                  INSTRUCTIONS:
+                  1. Answer accurately based on the context.
+                  2. Use a professional, academic tone.
+                  3. If multiple sources are provided, synthesize them.
+                  
+                  ANSWER:
+                  """
+                : $"""
+                  The user asked: '{question}'. 
+                  Note: No relevant documents were found in the research repository with high enough similarity for this specific query.
+                  Provide a professional response informing the user that the knowledge base doesn't contain specific data on this. 
+                  However, as a research assistant, provide a helpful general answer to their question if possible, while being clear that this information is NOT from their uploaded documents.
+                  """;
 
-            var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
+            var answer = await _aiService.GenerateAnswerAsync(prompt, modelName, ct);
             
             var assistantMessageId = Guid.NewGuid();
+            var sources = results.Select(r => new SourceCitation 
+            { 
+                Content = r.Content, 
+                SourceDocument = docNames.TryGetValue(r.DocumentId, out var name) ? name : "Unknown Source",
+                Score = NormalizeScore(r.Score, _config.Qdrant.SimilarityThreshold) 
+            }).ToList();
+
             _dbContext.ChatMessages.Add(new ChatMessage
             {
                 Id = assistantMessageId,
                 UserId = userId,
                 ChatSessionId = session.Id,
                 Role = "assistant",
-                Content = answer
+                Content = answer,
+                Metadata = sources.Any() ? JsonSerializer.Serialize(sources) : null,
+                ModelName = modelName ?? _config.Ollama.ChatModel,
+                ProcessingTimeMs = sw.ElapsedMilliseconds,
+                TokenCount = answer.Length / 4 // Heuristic: 1 token ~= 4 chars
             });
             
             await _dbContext.SaveChangesAsync(ct);
@@ -207,13 +277,10 @@ public class RagService : IRagService
             return new QueryResponse 
             { 
                 MessageId = assistantMessageId,
+                SessionId = session.Id,
+                SessionTitle = session.Title,
                 Answer = answer,
-                Sources = results.Select(r => new SourceCitation 
-                { 
-                    Content = r.Content, 
-                    SourceDocument = docNames.TryGetValue(r.DocumentId, out var name) ? name : "Unknown Source",
-                    Score = r.Score 
-                }).ToList(),
+                Sources = sources,
                 ProcessingTimeMs = sw.ElapsedMilliseconds
             };
         }
@@ -229,9 +296,23 @@ public class RagService : IRagService
         }
     }
 
-    private async Task<QueryResponse> HandleGeneralQueryAsync(ChatSession session, string question, string prompt, Stopwatch sw, CancellationToken ct)
+    private double NormalizeScore(float rawScore, double threshold)
     {
-        var answer = await _aiService.GenerateAnswerAsync(prompt, ct);
+        // Vector similarity scores (Cosine) often cluster. 
+        // We want to transform them into a "confidence" percentage that feels natural to users.
+        // A score at the threshold should feel like "Fairly Relevant" (~50-60%)
+        // A score of 0.8+ should feel like "Highly Relevant" (90%+)
+        
+        if (rawScore >= 0.9) return rawScore; // Already very high
+        
+        // Linear mapping from [threshold, 0.9] to [0.6, 0.95]
+        double normalized = 0.6 + (rawScore - threshold) * (0.35 / (0.9 - threshold));
+        return Math.Clamp(normalized, 0.0, 1.0);
+    }
+
+    private async Task<QueryResponse> HandleGeneralQueryAsync(ChatSession session, string question, string prompt, Stopwatch sw, string? modelName, CancellationToken ct)
+    {
+        var answer = await _aiService.GenerateAnswerAsync(prompt, modelName, ct);
         
         var messageId = Guid.NewGuid();
         _dbContext.ChatMessages.Add(new ChatMessage
@@ -250,6 +331,8 @@ public class RagService : IRagService
         return new QueryResponse 
         { 
             MessageId = messageId,
+            SessionId = session.Id,
+            SessionTitle = session.Title,
             Answer = answer,
             Sources = new List<SourceCitation>(),
             ProcessingTimeMs = sw.ElapsedMilliseconds
@@ -268,7 +351,10 @@ public class RagService : IRagService
                 Role = m.Role,
                 Content = m.Content,
                 CreatedAt = m.CreatedAt,
-                Effectiveness = (int)m.Effectiveness
+                Effectiveness = (int)m.Effectiveness,
+                ModelName = m.ModelName,
+                ProcessingTimeMs = m.ProcessingTimeMs,
+                TokenCount = m.TokenCount
             })
             .ToListAsync(ct);
     }
@@ -301,9 +387,38 @@ public class RagService : IRagService
                 Id = d.Id,
                 FileName = d.FileName,
                 CreatedAt = d.CreatedAt,
-                ChunkCount = d.Chunks.Count
+                ChunkCount = d.Chunks.Count,
+                FileSizeBytes = d.FileSizeBytes,
+                ProcessingTimeMs = d.ProcessingTimeMs
             })
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Deleting document {DocumentId} for user: {UserId}", documentId, userId);
+        try
+        {
+            var document = await _dbContext.Documents
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.UserId == userId, ct);
+
+            if (document == null) return false;
+
+            // 1. Delete from Vector DB
+            await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, documentId, userId, ct);
+
+            // 2. Delete from PostgreSQL
+            _dbContext.Documents.Remove(document);
+            await _dbContext.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Successfully deleted document {DocumentId}", documentId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete document {DocumentId}", documentId);
+            return false;
+        }
     }
 
     public async Task<bool> ClearCollectionAsync(CancellationToken ct = default)
@@ -419,7 +534,7 @@ public class RagService : IRagService
 
         try
         {
-            var result = await _aiService.GenerateAnswerAsync(intentPrompt, ct);
+            var result = await _aiService.GenerateAnswerAsync(intentPrompt, ct: ct);
             return result.Contains("RESEARCH", StringComparison.OrdinalIgnoreCase) 
                 ? QueryIntent.Research 
                 : QueryIntent.General;
@@ -429,5 +544,14 @@ public class RagService : IRagService
             // Fallback to Research to ensure we don't miss data if AI is flaky
             return QueryIntent.Research;
         }
+    }
+
+    private bool IsSimpleGreeting(string question)
+    {
+        var greetings = new[] { "hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "howdy", "thanks", "thank you", "who are you" };
+        var clean = question.Trim().ToLower().TrimEnd('?', '!', '.', ',');
+        
+        // Match if it's exactly a greeting or a short phrase containing one
+        return greetings.Contains(clean) || (clean.Split(' ').Length <= 3 && greetings.Any(g => clean.StartsWith(g)));
     }
 }

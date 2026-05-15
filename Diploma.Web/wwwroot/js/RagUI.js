@@ -561,6 +561,43 @@ class RagUI {
         this.chatInput.style.height = 'auto';
         this.chatInput.style.height = (this.chatInput.scrollHeight) + 'px';
     }
+
+    async handleDeleteSession(sessionId, element) {
+        if (!confirm('Are you sure you want to delete this research thread?')) return;
+        
+        try {
+            const success = await this.client.deleteSession(sessionId);
+            if (success) {
+                element.remove();
+                if (this.currentSessionId === sessionId) {
+                    this.currentSessionId = null;
+                    window.history.pushState({}, '', '/');
+                    this.renderLobby();
+                }
+            } else {
+                alert('Failed to delete research thread.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('An error occurred during deletion.');
+        }
+    }
+
+    async handleDeleteDocument(documentId, element) {
+        if (!confirm('Are you sure you want to delete this document from the knowledge registry?')) return;
+        
+        try {
+            const success = await this.client.deleteDocument(documentId);
+            if (success) {
+                element.remove();
+            } else {
+                alert('Failed to delete document.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('An error occurred during deletion.');
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => { window.ui = new RagUI(); });

@@ -34,4 +34,19 @@ public class ChatMessage : IMultiTenant
     /// For storing source citations/context used for this message
     /// </summary>
     public string? Metadata { get; set; }
+
+    /// <summary>
+    /// The AI model used to generate this specific message.
+    /// </summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>
+    /// Time taken to generate the response in milliseconds.
+    /// </summary>
+    public double ProcessingTimeMs { get; set; }
+
+    /// <summary>
+    /// Number of tokens (estimated) in the generated answer.
+    /// </summary>
+    public int TokenCount { get; set; }
 }
