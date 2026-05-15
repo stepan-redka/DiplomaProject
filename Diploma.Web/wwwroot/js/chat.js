@@ -12,6 +12,10 @@ class RagApp {
         this.clearBtn = document.getElementById('clearBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         
+        // Session State
+        this.mainWorkspace = document.getElementById('mainWorkspace');
+        this.currentSessionId = this.mainWorkspace ? this.mainWorkspace.getAttribute('data-session-id') : null;
+        
         // Tuning and Paste UI
         this.topKRange = document.getElementById('topKRange');
         this.topKValue = document.getElementById('topKValue');
@@ -66,24 +70,61 @@ class RagApp {
     }
 
     async loadChatHistory() {
+        if (!this.currentSessionId || this.currentSessionId === "") {
+            this.renderLobby();
+            return;
+        }
+
         try {
-            const response = await fetch('/Chat/GetHistory');
+            const response = await fetch(`/Chat/GetSessionHistory?sessionId=${this.currentSessionId}`);
             if (response.status === 401) {
                 console.log('Guest mode: Skipping history load.');
+                this.renderLobby();
                 return;
             }
             
             if (response.ok) {
                 const history = await response.json();
-                if (history.length > 0) {
-                    this.chatWindow.innerHTML = '';
+                this.chatWindow.innerHTML = '';
+                if (history && history.length > 0) {
                     history.forEach(msg => {
                         this.appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content, null, msg.id, msg.effectiveness);
                     });
+                } else {
+                    this.renderLobby();
                 }
             }
         } catch (error) {
             console.error('Failed to load chat history:', error);
+            this.renderLobby();
+        }
+    }
+
+    renderLobby() {
+        this.chatWindow.innerHTML = `
+            <div class="max-w-2xl mx-auto py-24 text-center space-y-8 fade-in">
+                <div class="relative inline-block">
+                    <div class="absolute -inset-4 bg-white/10 blur-2xl rounded-full"></div>
+                    <div class="relative w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500">
+                        <i data-lucide="sparkles" class="w-10 h-10 text-black"></i>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <h1 class="text-4xl font-bold text-white tracking-tight">New Research Project</h1>
+                    <p class="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
+                        Establish a knowledge context by selecting sources from the registry or initiating a raw stream ingestion.
+                    </p>
+                </div>
+                <div class="flex items-center justify-center gap-4 pt-4">
+                    <div class="px-4 py-2 rounded-full bg-zinc-900 border border-zinc-800 flex items-center gap-2">
+                        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Environment Ready</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        if (window.lucide) {
+            lucide.createIcons({ root: this.chatWindow });
         }
     }
 
@@ -95,6 +136,11 @@ class RagApp {
         const isResearch = this.researchModeToggle ? this.researchModeToggle.checked : true;
         const intent = isResearch ? 1 : 0; // 1 = Research, 0 = General
 
+        // Clear lobby if first message
+        if (this.chatWindow.querySelector('.py-24')) {
+            this.chatWindow.innerHTML = '';
+        }
+
         this.appendMessage('user', question);
         this.chatInput.value = '';
         this.showLoading(true);
@@ -105,6 +151,7 @@ class RagApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     question: question, 
+                    sessionId: this.currentSessionId,
                     topK: topK,
                     intent: intent
                 })
@@ -113,6 +160,14 @@ class RagApp {
             if (!response.ok) throw new Error('Failed to communicate with AI service.');
 
             const data = await response.json();
+            
+            // If this was a new session, update the state and URL
+            if (!this.currentSessionId && data.sessionId) {
+                this.currentSessionId = data.sessionId;
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?sessionId=' + data.sessionId;
+                window.history.pushState({path:newUrl},'',newUrl);
+            }
+
             this.appendMessage('ai', data.answer, data.latencyMs, data.messageId);
             
             if (data.sources && data.sources.length > 0) {

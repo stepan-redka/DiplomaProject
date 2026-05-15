@@ -1,14 +1,137 @@
 /*
-    RagSystem Modern Styles
-    All primary styling handled via Tailwind CSS in Razor Views.
-    This file is intentionally minimal.
+    RagSystem Research Dashboard Styles
+    Complementing Tailwind with scientific UI transitions and deep-indigo theme.
 */
 
 :root {
-    color-scheme: dark;
+    --indigo-primary: #6366f1;
 }
 
 body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scientific Pane Transitions */
+.slide-in {
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom Scrollbar for Research Feed and Sidebar */
+#chatWindow::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+#chatWindow::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chatWindow::-webkit-scrollbar-thumb, .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e4e4e7; /* zinc-200 */
+    border-radius: 10px;
+}
+
+.dark #chatWindow::-webkit-scrollbar-thumb, .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #27272a; /* zinc-800 */
+}
+
+#chatWindow::-webkit-scrollbar-thumb:hover, .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #d4d4d8; /* zinc-300 */
+}
+
+.dark #chatWindow::-webkit-scrollbar-thumb:hover, .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46; /* zinc-500 */
+}
+
+/* Tactile List Items for Sidebar */
+.shadow-inner-soft {
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03);
+}
+
+.dark .shadow-inner-soft {
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Markdown Table Professionalism */
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.875rem;
+}
+
+.prose th {
+    background: #f4f4f5; /* zinc-100 */
+    color: #71717a; /* zinc-500 */
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border: 1px solid #e4e4e7;
+}
+
+.dark .prose th {
+    background: #18181b;
+    color: #a1a1aa;
+    border: 1px solid #27272a;
+}
+
+.prose td {
+    padding: 0.75rem 1rem;
+    border: 1px solid #e4e4e7;
+    color: #3f3f46;
+}
+
+.dark .prose td {
+    border: 1px solid #27272a;
+    color: #d4d4d8;
+}
+
+/* Inline Code & Block Scientific Highlight */
+.prose code {
+    background: #f4f4f5;
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #4338ca;
+}
+
+.dark .prose code {
+    background: #18181b;
+    color: #e0e7ff;
+}
+
+.prose pre {
+    background: #ffffff !important;
+    border: 1px solid #e4e4e7;
+    border-radius: 1rem;
+    padding: 1.5rem !important;
+}
+
+.dark .prose pre {
+    background: #09090b !important;
+    border: 1px solid #18181b;
+}
+
+/* KaTeX Formula Centering */
+.katex-display {
+    margin: 1.5em 0;
+    padding: 1em;
+    background: rgba(99, 102, 241, 0.03);
+    border-radius: 12px;
 }

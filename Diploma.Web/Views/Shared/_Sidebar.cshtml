@@ -1,0 +1,195 @@
+@model Diploma.Web.Models.SidebarViewModel
+
+<aside id="mainSidebar" class="w-[300px] bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col shrink-0 z-30 transition-all duration-300 overflow-hidden">
+    <!-- Sidebar Header: Logo & Controls -->
+    <div class="p-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-7 h-7 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center shadow-lg shadow-black/5 dark:shadow-white/5">
+                <i data-lucide="microscope" class="w-4 h-4 text-indigo-500"></i>
+            </div>
+            <span class="font-bold text-base tracking-tight text-zinc-900 dark:text-white">RagSystem</span>
+        </div>
+    </div>
+
+    <nav class="flex-1 px-4 py-2 overflow-hidden flex flex-col gap-6">
+        @if (Model.IsAuthenticated)
+        {
+            <!-- Navigation Links -->
+            <div class="space-y-1">
+                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-indigo-600 hover:bg-indigo-500/5 transition-all @(ViewContext.RouteData.Values["controller"]?.ToString() == "Home" ? "text-indigo-600 bg-indigo-500/5 shadow-inner" : "")">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    <span>Research Desk</span>
+                </a>
+                <a href="#" data-view="Benchmarks" class="lab-link flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-indigo-600 hover:bg-indigo-500/5 transition-all">
+                    <i data-lucide="chart-bar" class="w-5 h-5"></i>
+                    <span>Research Lab</span>
+                </a>
+            </div>
+
+            <!-- RESEARCH THREADS (Collapsible) -->
+            <div class="flex-1 flex flex-col min-h-0 space-y-2">
+                <div class="flex items-center justify-between px-2">
+                    <button onclick="document.getElementById('sessionList').classList.toggle('hidden'); this.querySelector('[data-lucide]').classList.toggle('rotate-90')" 
+                            class="flex items-center gap-2 text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-600 tracking-[0.2em] hover:text-zinc-900 dark:hover:text-zinc-300 transition-all">
+                        <i data-lucide="chevron-right" class="w-4 h-4 transition-transform"></i>
+                        <span>Research Threads</span>
+                    </button>
+                    <a href="/" class="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 dark:text-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors" title="New Thread">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </a>
+                </div>
+                <div id="sessionList" class="hidden flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                    @foreach (var session in Model.RecentSessions)
+                    {
+                        <div class="group relative flex items-center">
+                            <a href="/?sessionId=@session.Id" 
+                               class="flex-1 flex flex-col gap-1.5 p-4 rounded-2xl border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 hover:bg-white dark:hover:bg-zinc-900/50 hover:shadow-xl dark:hover:shadow-black/20 transition-all @(Model.ActiveSessionId == session.Id ? "bg-white dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 shadow-lg ring-1 ring-black/5 dark:ring-white/5" : "")">
+                                <span class="text-[11px] font-bold @(Model.ActiveSessionId == session.Id ? "text-indigo-600 dark:text-white" : "text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300") truncate pr-6">@session.Title</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[9px] text-zinc-400 dark:text-zinc-600 font-medium">@session.CreatedAt.ToString("MMM dd")</span>
+                                    <div class="w-1 h-1 rounded-full bg-zinc-200 dark:bg-zinc-800"></div>
+                                    <span class="text-[9px] text-zinc-400 dark:text-zinc-600 font-medium">@session.MessageCount units</span>
+                                </div>
+                            </a>
+                            <button onclick="window.ui.handleDeleteSession('@session.Id', this.parentElement)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Guest Identity Promo -->
+            <div class="p-6 rounded-3xl bg-indigo-600/5 border border-dashed border-indigo-500/20 group hover:border-indigo-500/40 transition-all">
+                <a href="/Account/Login" class="space-y-4 block">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-widest">Restricted Access</span>
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-indigo-500/50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"></i>
+                    </div>
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-500 leading-relaxed">Identity verification required for persistent silos and scientific export.</p>
+                    <div class="flex items-center gap-2 pt-2">
+                         <div class="flex-1 h-10 rounded-xl bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">Establish Identity</div>
+                    </div>
+                </a>
+            </div>
+        }
+
+        <!-- KNOWLEDGE REGISTRY (Collapsible) -->
+        <div class="flex-1 flex flex-col min-h-0 space-y-2">
+            <div class="flex items-center justify-between px-2">
+                <button onclick="document.getElementById('documentList').classList.toggle('hidden'); this.querySelector('[data-lucide]').classList.toggle('rotate-90')" 
+                        class="flex items-center gap-2 text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-600 tracking-[0.2em] hover:text-zinc-900 dark:hover:text-zinc-300 transition-all">
+                    <i data-lucide="chevron-right" class="w-4 h-4 transition-transform"></i>
+                    <span>Knowledge Registry</span>
+                </button>
+                @if (Model.IsAuthenticated)
+                {
+                    <form id="uploadForm" enctype="multipart/form-data" class="flex">
+                        @Html.AntiForgeryToken()
+                        <label class="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 dark:text-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer" title="Ingest Source">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <input type="file" id="fileInput" name="files" hidden accept=".pdf,.docx,.md,.txt,.html" multiple />
+                        </label>
+                    </form>
+                }
+            </div>
+            
+            <div id="documentList" class="hidden flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                @if (Model.Documents != null && Model.Documents.Any())
+                {
+                    foreach (var doc in Model.Documents)
+                    {
+                        <div class="group relative flex items-center px-4 py-3.5 rounded-2xl hover:bg-white dark:hover:bg-zinc-900/50 transition-all border border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 hover:shadow-lg dark:hover:shadow-black/20" title="Created: @doc.CreatedAt">
+                            <div class="flex items-center gap-3 overflow-hidden flex-1 pr-6">
+                                <i data-lucide="file-text" class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-600 shrink-0"></i>
+                                <span class="text-[11px] text-zinc-500 dark:text-zinc-500 font-medium truncate group-hover:text-zinc-900 dark:group-hover:text-zinc-200">@doc.FileName</span>
+                                <span class="text-[9px] font-mono text-zinc-300 dark:text-zinc-700 ml-auto">@doc.ChunkCount</span>
+                            </div>
+                            <button onclick="window.ui.handleDeleteDocument('@doc.Id', this.parentElement)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="px-2 py-8 text-center opacity-20">
+                        <i data-lucide="database" class="w-6 h-6 mx-auto mb-2 text-zinc-900 dark:text-white"></i>
+                        <p class="text-[9px] uppercase tracking-widest text-zinc-900 dark:text-white">Registry Empty</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar Footer: User Identity & Settings -->
+    <div class="mt-auto flex flex-col">
+        <div class="h-px w-full bg-zinc-200 dark:bg-zinc-800"></div>
+        
+        <div class="p-4 bg-white/50 dark:bg-zinc-950/50">
+            @if (Model.IsAuthenticated)
+            {
+                <div class="flex items-center justify-between gap-3">
+                    <!-- User Identity -->
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-[11px] font-bold text-indigo-600 dark:text-indigo-400 shrink-0 border border-indigo-500/20" title="Researcher Profile">
+                            @((Model.UserEmail ?? Model.UserName ?? "R").Substring(0, 1).ToUpper())
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-[9px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest leading-none mb-1">Principal Investigator</span>
+                            <span class="text-xs font-bold text-zinc-900 dark:text-white truncate">@Model.UserEmail</span>
+                        </div>
+                    </div>
+
+                    <!-- Settings Cog -->
+                    <div class="relative">
+                        <button id="sidebarSettingsBtn" class="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-600 transition-all" title="System Settings">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+                        
+                        <!-- Settings Dropdown (Relocated to bottom-up) -->
+                        <div id="sidebarSettingsDropdown" class="absolute bottom-full right-0 mb-2 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl py-2 hidden z-50">
+                            <a href="#" class="flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all uppercase tracking-tight">
+                                <i data-lucide="user-cog" class="w-3.5 h-3.5"></i>
+                                <span>Edit Profile</span>
+                            </a>
+                            <a href="#" class="flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all uppercase tracking-tight">
+                                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                                <span>Account Security</span>
+                            </a>
+                            <div class="h-px bg-zinc-100 dark:bg-zinc-800 mx-2 my-1"></div>
+                            <form asp-controller="Account" asp-action="Logout" method="post" class="w-full">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-left uppercase tracking-tight">
+                                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                                    <span>Logout Scientist</span>
+                                </button>
+                            </form>
+                            <form asp-controller="Account" asp-action="DeleteAccount" method="post" onsubmit="return confirm('CRITICAL: Purge all research data and destroy identity profile? This action is IRREVERSIBLE.')" class="w-full">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-bold text-red-500/60 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/5 transition-all text-left uppercase tracking-tight">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    <span>Terminate Account</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="flex items-center gap-3 opacity-50">
+                    <div class="w-8 h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-zinc-400 shrink-0">G</div>
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Guest Researcher</span>
+                </div>
+            }
+        </div>
+
+        <!-- Progress Bar at the very bottom -->
+        <div class="h-[2px] w-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden" title="Storage Load: @Model.StorageUsedPercentage%">
+            <div class="h-full bg-indigo-500/50 transition-all duration-1000" style="width: @Model.StorageUsedPercentage%"></div>
+        </div>
+    </div>
+</aside>
