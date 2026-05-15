@@ -83,7 +83,7 @@ public class IngestionBackgroundServiceTests
         await executeTask;
 
         // Assert
-        _mockRagService.Verify(r => r.IngestDocumentAsync("Parsed Content", fileName, It.IsAny<CancellationToken>()), Times.Once);
+        _mockRagService.Verify(r => r.IngestDocumentAsync("Parsed Content", fileName, It.IsAny<Guid?>(), It.IsAny<CancellationToken>()), Times.Once);
         
         // Verify document was created in DB
         var doc = await _dbContext.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.FileName == fileName);

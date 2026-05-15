@@ -11,5 +11,8 @@ public enum DocumentType
     Docx,
     Markdown,
     Html,
-    LaTeX
+    LaTeX,
+    SourceCode,
+    Csv,
+    Excel
 }

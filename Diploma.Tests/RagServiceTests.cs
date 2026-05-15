@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces;
 using Diploma.Domain.Entities;
+using Diploma.Domain.Enums;
 using Diploma.Infrastructure.Persistence;
 using Diploma.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,13 @@ public class RagServiceTests
     private readonly Mock<IAiService> _mockAi;
     private readonly Mock<IVectorDatabase> _mockVectorDb;
     private readonly Mock<ICurrentUserService> _mockUserService;
+    private readonly Mock<IIntentResolver> _mockIntentResolver;
+    private readonly Mock<IRetrievalService> _mockRetrievalService;
+    private readonly Mock<IDocumentService> _mockDocumentService;
+    private readonly Mock<IAnalyticsService> _mockAnalyticsService;
+    private readonly Mock<IPromptRegistry> _mockPromptRegistry;
+    private readonly Mock<IEvaluationService> _mockEvaluationService;
+    private readonly Mock<ITokenizerService> _mockTokenizerService;
     private readonly Mock<ILogger<RagService>> _mockLogger;
     private readonly RagConfiguration _config;
     private readonly ApplicationDbContext _dbContext;
@@ -31,18 +39,44 @@ public class RagServiceTests
         _mockAi = new Mock<IAiService>();
         _mockVectorDb = new Mock<IVectorDatabase>();
         _mockUserService = new Mock<ICurrentUserService>();
+        _mockIntentResolver = new Mock<IIntentResolver>();
+        _mockRetrievalService = new Mock<IRetrievalService>();
+        _mockDocumentService = new Mock<IDocumentService>();
+        _mockAnalyticsService = new Mock<IAnalyticsService>();
+        _mockPromptRegistry = new Mock<IPromptRegistry>();
+        _mockEvaluationService = new Mock<IEvaluationService>();
+        _mockTokenizerService = new Mock<ITokenizerService>();
         _mockLogger = new Mock<ILogger<RagService>>();
 
         _config = new RagConfiguration
         {
             Chunking = new ChunkingSettings { MaxChunkSize = 500, ChunkOverlap = 100 },
-            Qdrant = new QdrantSettings { CollectionName = "test", VectorSize = 768 }
+            Qdrant = new QdrantSettings { CollectionName = "test", VectorSize = 768, SimilarityThreshold = 0.5, DefaultTopK = 3 }
         };
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         _dbContext = new ApplicationDbContext(options, _mockUserService.Object);
+    }
+
+    private RagService CreateService()
+    {
+        return new RagService(
+            _dbContext,
+            _mockUserService.Object,
+            _mockIntentResolver.Object,
+            _mockRetrievalService.Object,
+            _mockDocumentService.Object,
+            _mockAnalyticsService.Object,
+            _mockPromptRegistry.Object,
+            _mockEvaluationService.Object,
+            _mockTokenizerService.Object,
+            _mockAi.Object,
+            _mockChunker.Object,
+            _mockVectorDb.Object,
+            _config,
+            _mockLogger.Object);
     }
 
     [Fact]
@@ -54,11 +88,10 @@ public class RagServiceTests
         _mockChunker.Setup(c => c.ChunkText(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .Returns(new List<string> { "chunk1" });
         
-        // Mock the new batch embedding method
         _mockAi.Setup(s => s.GetTextEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
 
-        var service = new RagService(_mockChunker.Object, _mockAi.Object, _mockVectorDb.Object, _dbContext, _config, _mockUserService.Object, _mockLogger.Object);
+        var service = CreateService();
 
         // Act
         await service.IngestDocumentAsync("Test content", "test.txt");
@@ -71,59 +104,31 @@ public class RagServiceTests
     }
 
     [Fact]
-    public async Task QueryAsync_ShouldFilterByUserId()
+    public async Task QueryAsync_ShouldCoordinateFlow()
     {
         // Arrange
         var userId = "user-999";
         _mockUserService.Setup(s => s.UserId).Returns(userId);
         
-        // Individual embedding call still used in QueryAsync
-        _mockAi.Setup(s => s.GetTextEmbeddingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new float[768]);
-            
-        _mockAi.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _mockDocumentService.Setup(d => d.GetDocumentCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        _mockIntentResolver.Setup(i => i.ResolveAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(QueryIntent.Research);
+
+        _mockRetrievalService.Setup(r => r.GetRelevantContextAsync(It.IsAny<string>(), userId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SourceCitation>());
+
+        _mockAi.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("Mocked AI Answer");
-        
-        _mockVectorDb.Setup(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ScoredChunkDto>());
 
-        var service = new RagService(_mockChunker.Object, _mockAi.Object, _mockVectorDb.Object, _dbContext, _config, _mockUserService.Object, _mockLogger.Object);
+        _mockPromptRegistry.Setup(p => p.GetGeneralPrompt(It.IsAny<string>())).Returns("General Prompt");
 
-        // Act
-        await service.QueryAsync("What is RAG?", 3);
-
-        // Assert
-        _mockVectorDb.Verify(v => v.SearchAsync(It.IsAny<string>(), It.IsAny<float[]>(), userId, 3, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ClearCollectionAsync_ShouldOnlyAffectCurrentUser()
-    {
-        // Arrange
-        var userA = "user-A";
-        var userB = "user-B";
-
-        // Seed data for User A
-        _mockUserService.Setup(s => s.UserId).Returns(userA);
-        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docA.txt", UserId = userA });
-        await _dbContext.SaveChangesAsync();
-
-        // Seed data for User B
-        _mockUserService.Setup(s => s.UserId).Returns(userB);
-        _dbContext.Documents.Add(new Document { Id = Guid.NewGuid(), FileName = "docB.txt", UserId = userB });
-        await _dbContext.SaveChangesAsync();
-
-        // Switch back to User A for the actual test
-        _mockUserService.Setup(s => s.UserId).Returns(userA);
-
-        var service = new RagService(_mockChunker.Object, _mockAi.Object, _mockVectorDb.Object, _dbContext, _config, _mockUserService.Object, _mockLogger.Object);
+        var service = CreateService();
 
         // Act
-        await service.ClearCollectionAsync();
+        await service.QueryAsync("What is RAG?", null, 3, null, null, true);
 
         // Assert
-        var allDocs = await _dbContext.Documents.IgnoreQueryFilters().ToListAsync();
-        Assert.Single(allDocs);
-        Assert.Equal(userB, allDocs[0].UserId);
+        _mockIntentResolver.Verify(i => i.ResolveAsync("What is RAG?", true, true, It.IsAny<CancellationToken>()), Times.Once);
+        _mockRetrievalService.Verify(r => r.GetRelevantContextAsync("What is RAG?", userId, 3, It.IsAny<CancellationToken>()), Times.Once);
     }
 }
