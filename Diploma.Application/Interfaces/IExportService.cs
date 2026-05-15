@@ -6,5 +6,6 @@ public interface IExportService
 {
     byte[] ExportChatHistoryAsJson(IEnumerable<ChatMessageDto> history);
     byte[] ExportChatHistoryAsPdf(IEnumerable<ChatMessageDto> history, string userName);
+    byte[] ExportResearchDataAsCsv(IEnumerable<ChatMessageDto> history);
     string GetExportFileName(string extension);
 }

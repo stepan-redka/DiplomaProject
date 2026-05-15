@@ -216,68 +216,17 @@ class RagUI {
                 }
             });
             
-            if (viewName.toLowerCase() === 'benchmarks') {
-                setTimeout(() => this.initCharts(), 100);
+            // Re-initialize Lucide icons for the new content
+            if (window.lucide) {
+                lucide.createIcons({ root: this.chatWindow });
             }
 
-            if (window.lucide) lucide.createIcons({ root: this.chatWindow });
+            // Note: Charts are initialized by the inline script within the partial view (_Benchmarks.cshtml)
         } catch (error) {
             console.error(error);
             this.chatWindow.innerHTML = `<div class="p-12 text-center text-red-500 font-mono text-xs">ERR_VIEW_LOAD_FAILED: ${error.message}</div>`;
         } finally {
             this.showLoading(false);
-        }
-    }
-
-    initCharts() {
-        // Destroy existing charts
-        this.charts.forEach(c => c.destroy());
-        this.charts = [];
-
-        const ctxLatency = document.getElementById('latencyChart');
-        const ctxSimilarity = document.getElementById('similarityChart');
-
-        if (ctxLatency) {
-            this.charts.push(new Chart(ctxLatency, {
-                type: 'line',
-                data: {
-                    labels: ['T-5', 'T-4', 'T-3', 'T-2', 'T-1', 'Now'],
-                    datasets: [{
-                        label: 'Synthesis Latency',
-                        data: [420, 380, 510, 440, 490, 460],
-                        borderColor: '#6366f1',
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { grid: { display: false } } }
-                }
-            }));
-        }
-
-        if (ctxSimilarity) {
-            this.charts.push(new Chart(ctxSimilarity, {
-                type: 'doughnut',
-                data: {
-                    labels: ['High', 'Medium', 'Low'],
-                    datasets: [{
-                        data: [65, 25, 10],
-                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, font: { size: 10 } } } },
-                    cutout: '70%'
-                }
-            }));
         }
     }
 

@@ -1,10 +1,10 @@
 using System.Text.Json;
+using System.Text;
 using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using QuestPDF.Previewer;
 
 namespace Diploma.Infrastructure.Services;
 
@@ -12,7 +12,6 @@ public class ExportService : IExportService
 {
     static ExportService()
     {
-        // QuestPDF License setup - Community edition is free for individuals/students
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
@@ -92,6 +91,33 @@ public class ExportService : IExportService
         });
 
         return document.GeneratePdf();
+    }
+
+    public byte[] ExportResearchDataAsCsv(IEnumerable<ChatMessageDto> history)
+    {
+        var sb = new StringBuilder();
+        // Header
+        sb.AppendLine("Timestamp,ModelName,LatencyMs,SimilarityScore,UserFeedback,TokenCount");
+
+        foreach (var msg in history.Where(m => m.Role == "assistant"))
+        {
+            double maxScore = 0;
+            if (msg.Sources.Any())
+            {
+                maxScore = msg.Sources.Max(s => s.Score);
+            }
+
+            var line = $"{msg.CreatedAt:yyyy-MM-dd HH:mm:ss}," +
+                       $"\"{msg.ModelName ?? "Unknown"}\"," +
+                       $"{msg.ProcessingTimeMs:F2}," +
+                       $"{maxScore:F4}," +
+                       $"{(int)msg.Effectiveness}," +
+                       $"{msg.TokenCount}";
+            
+            sb.AppendLine(line);
+        }
+
+        return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
     public string GetExportFileName(string extension)
