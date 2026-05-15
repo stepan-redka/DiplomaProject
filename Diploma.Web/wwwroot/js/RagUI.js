@@ -685,7 +685,7 @@ class RagUI {
     }
 
     async handleDeleteSession(sessionId, element) {
-        if (!confirm('Are you sure you want to delete this research thread?')) return;
+        if (!await window.showConfirm('Delete Research Thread', 'Are you sure you want to delete this research thread? This action is irreversible.')) return;
         
         try {
             const success = await this.client.deleteSession(sessionId);
@@ -698,27 +698,27 @@ class RagUI {
                     this.updateExportLink();
                 }
             } else {
-                alert('Failed to delete research thread.');
+                window.showAlert('Deletion Failed', 'Failed to delete research thread.', 'error');
             }
         } catch (error) {
             console.error(error);
-            alert('An error occurred during deletion.');
+            window.showAlert('System Error', 'An error occurred during deletion.', 'error');
         }
     }
 
     async handleDeleteDocument(documentId, element) {
-        if (!confirm('Are you sure you want to delete this document from the knowledge registry?')) return;
+        if (!await window.showConfirm('Delete Document', 'Are you sure you want to delete this document from the knowledge registry?')) return;
         
         try {
             const success = await this.client.deleteDocument(documentId);
             if (success) {
                 element.remove();
             } else {
-                alert('Failed to delete document.');
+                window.showAlert('Deletion Failed', 'Failed to delete document.', 'error');
             }
         } catch (error) {
             console.error(error);
-            alert('An error occurred during deletion.');
+            window.showAlert('System Error', 'An error occurred during deletion.', 'error');
         }
     }
 }

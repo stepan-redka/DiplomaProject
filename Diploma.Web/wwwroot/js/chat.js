@@ -284,10 +284,10 @@ class RagApp {
             if (response.ok) {
                 window.location.reload();
             } else {
-                alert('Failed to index text.');
+                window.showAlert('Indexing Failed', 'Failed to index text.', 'error');
             }
         } catch (error) {
-            alert('Network error during indexing.');
+            window.showAlert('System Error', 'Network error during indexing.', 'error');
         } finally {
             this.savePasteBtn.disabled = false;
             this.savePasteBtn.innerText = 'INDEX CONTENT';
@@ -295,7 +295,7 @@ class RagApp {
     }
 
     async handleClear() {
-        if (!confirm('Destroy current knowledge collection? This action is irreversible.')) return;
+        if (!await window.showConfirm('Clear Collection', 'Destroy current knowledge collection? This action is irreversible.')) return;
 
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
@@ -314,7 +314,7 @@ class RagApp {
                 window.location.reload();
             }
         } catch (error) {
-            alert('Error clearing collection.');
+            window.showAlert('System Error', 'Error clearing collection.', 'error');
         }
     }
 
