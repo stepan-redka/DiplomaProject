@@ -46,32 +46,57 @@ public class ChatHistoryService : IChatHistoryService
 
     public async Task<ChatSessionDetailDto?> GetSessionDetailsAsync(Guid sessionId, CancellationToken ct = default)
     {
-        var session = await _dbContext.ChatSessions
-            .Include(s => s.Messages.OrderBy(m => m.CreatedAt))
-            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
-
-        if (session == null) return null;
-
-        return new ChatSessionDetailDto
+        try
         {
-            Id = session.Id,
-            Title = session.Title,
-            SelectedModel = session.SelectedModel,
-            Messages = session.Messages.Select(m => new ChatMessageDto
+            var session = await _dbContext.ChatSessions
+                .Include(s => s.Messages)
+                .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+
+            if (session == null) return null;
+
+            var deserializeOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            return new ChatSessionDetailDto
             {
-                Id = m.Id,
-                Role = m.Role,
-                Content = m.Content,
-                CreatedAt = m.CreatedAt,
-                Effectiveness = (int)m.Effectiveness,
-                ModelName = m.ModelName,
-                ProcessingTimeMs = m.ProcessingTimeMs,
-                TokenCount = m.TokenCount,
-                Sources = !string.IsNullOrEmpty(m.Metadata) 
-                    ? JsonSerializer.Deserialize<List<SourceCitation>>(m.Metadata) ?? new List<SourceCitation>()
-                    : new List<SourceCitation>()
-            }).ToList()
-        };
+                Id = session.Id,
+                Title = session.Title,
+                CreatedAt = session.CreatedAt,
+                SelectedModel = session.SelectedModel,
+                Messages = session.Messages.OrderBy(m => m.CreatedAt).Select(m =>
+                {
+                    List<SourceCitation> sources;
+                    try
+                    {
+                        sources = !string.IsNullOrEmpty(m.Metadata)
+                            ? JsonSerializer.Deserialize<List<SourceCitation>>(m.Metadata, deserializeOptions) ?? new List<SourceCitation>()
+                            : new List<SourceCitation>();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to deserialize metadata for message {MessageId}", m.Id);
+                        sources = new List<SourceCitation>();
+                    }
+
+                    return new ChatMessageDto
+                    {
+                        Id = m.Id,
+                        Role = m.Role,
+                        Content = m.Content,
+                        CreatedAt = m.CreatedAt,
+                        Effectiveness = (int)m.Effectiveness,
+                        ModelName = m.ModelName,
+                        ProcessingTimeMs = m.ProcessingTimeMs,
+                        TokenCount = m.TokenCount,
+                        Sources = sources
+                    };
+                }).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Database error while retrieving session details for {SessionId}", sessionId);
+            throw; // Re-throw to allow controller to handle 500 error correctly
+        }
     }
 
     public async Task<Guid> CreateSessionAsync(string title, IEnumerable<Guid>? documentIds = null, CancellationToken ct = default)

@@ -70,15 +70,8 @@ public class IngestionBackgroundService : BackgroundService
 
                 if (parsedDoc.Success && !string.IsNullOrWhiteSpace(parsedDoc.Content))
                 {
-                    // Update content before RAG ingestion
-                    document.Content = parsedDoc.Content;
-                    await dbContext.SaveChangesAsync(stoppingToken);
-
-                    // 4. Ingest into RAG pipeline
-                    await ragService.IngestDocumentAsync(parsedDoc.Content, task.FileName, stoppingToken);
-                    
-                    document.Status = IngestionStatus.Success;
-                    await dbContext.SaveChangesAsync(stoppingToken);
+                    // 4. Ingest into RAG pipeline (Pass existing documentId to prevent duplication)
+                    await ragService.IngestDocumentAsync(parsedDoc.Content, task.FileName, documentId, stoppingToken);
                     
                     _logger.LogInformation("Successfully background-indexed: {FileName}", task.FileName);
                 }
