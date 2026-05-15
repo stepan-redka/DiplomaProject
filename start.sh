@@ -1,46 +1,26 @@
 #!/bin/bash
-# RagSystem Quick Start Script
+# RagSystem Production-Ready Orchestrator
 
-# Function to run docker compose (handling v1/v2 naming)
-run_compose() {
-    if docker compose version >/dev/null 2>&1; then
-        docker compose "$@"
-    else
-        docker-compose "$@"
-    fi
-}
-
-echo "--- Infrastructure Check ---"
-COMPOSE_VER=$(run_compose version --short 2>/dev/null || docker-compose version --short 2>/dev/null)
-echo "Detected Compose Version: $COMPOSE_VER"
-
-if [[ "$COMPOSE_VER" == 1.* ]]; then
-    echo "Warning: You are using Docker Compose V1. If you see 'ContainerConfig' errors, we will attempt an automatic recovery."
+# 1. Force modern Docker Compose
+DOCKER_CMD="docker compose"
+if ! $DOCKER_CMD version >/dev/null 2>&1; then
+    echo "Error: Modern 'docker compose' (V2) not found."
+    exit 1
 fi
 
-# Try to start. If it fails with the common v1 bug, force a reset.
-if ! run_compose up -d 2>/tmp/compose_error; then
-    ERROR_MSG=$(cat /tmp/compose_error)
-    echo "$ERROR_MSG"
-    if [[ "$ERROR_MSG" == *"ContainerConfig"* ]]; then
-        echo "Detected 'ContainerConfig' bug. Performing hard reset of containers..."
-        run_compose down --remove-orphans
-        run_compose up -d
-    else
-        echo "Error: Infrastructure failed to start. Please check the logs above."
-        exit 1
-    fi
-fi
-
-echo "--- Verifying Ollama ---"
-if curl -s http://localhost:11434/api/tags > /dev/null; then
-    echo "Ollama is active."
+echo "--- GPU check ---"
+if command -v nvidia-smi &> /dev/null; then
+    nvidia-smi -L
 else
-    echo "Warning: Ollama not detected. Ensure it is running on port 11434."
+    echo "Warning: NVIDIA GPU not detected. Ollama will run on CPU (Slow)."
 fi
 
-echo "--- Building Solution ---"
-dotnet build RagSystem.sln
+echo "--- Orchestrating Environment ---"
+# --remove-orphans cleans up containers not defined in the current file
+# We remove -v to preserve volumes (like AI models and Database) between restarts
+$DOCKER_CMD down --remove-orphans
+$DOCKER_CMD up --build -d
 
-echo "--- Launching Web Dashboard ---"
-dotnet run --project Diploma.Web
+echo "--- Following Web Server Logs ---"
+echo "System is starting. Model pulling continues in the background."
+$DOCKER_CMD logs -f web

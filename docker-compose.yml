@@ -1,4 +1,23 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ragsystem-web
+    ports:
+      - "5000:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=ragsystem-postgres;Port=5432;Database=RagSystem;Username=postgres;Password=postgres
+      - RagConfiguration__Qdrant__Host=ragsystem-qdrant
+      - RagConfiguration__Ollama__Endpoint=http://ragsystem-ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+
   postgres:
     image: postgres:16-alpine
     container_name: ragsystem-postgres
@@ -10,6 +29,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -20,6 +44,42 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ragsystem-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ollama-setup:
+    image: alpine:latest
+    container_name: ragsystem-ollama-setup
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: >
+      -c "apk add --no-cache curl &&
+          echo 'Waiting for Ollama...' &&
+          until curl -s http://ragsystem-ollama:11434/api/tags > /dev/null; do sleep 2; done &&
+          echo 'Pulling Llama 3.1...' &&
+          curl -X POST http://ragsystem-ollama:11434/api/pull -d '{\"name\": \"llama3.1\"}' &&
+          echo 'Pulling Qwen 2.5...' &&
+          curl -X POST http://ragsystem-ollama:11434/api/pull -d '{\"name\": \"qwen2.5:7b\"}' &&
+          echo 'Pulling Phi 3.5...' &&
+          curl -X POST http://ragsystem-ollama:11434/api/pull -d '{\"name\": \"phi3.5\"}' &&
+          echo 'Pulling Embeddings Model...' &&
+          curl -X POST http://ragsystem-ollama:11434/api/pull -d '{\"name\": \"nomic-embed-text\"}' &&
+          echo 'All models pulled successfully!'"
+
 volumes:
   postgres_data:
   qdrant_data:
+  ollama_data:
