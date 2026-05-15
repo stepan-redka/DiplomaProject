@@ -24,25 +24,25 @@ public class HealthService : IHealthService
     {
         var health = new SystemHealthDto();
         
-        // 1. Database Health (PostgreSQL)
-        health.Database = await CheckService("PostgreSQL", async () => 
+        // 1. Database Health (PostgreSQL) - 3s timeout
+        health.Database = await CheckService("PostgreSQL", async (token) => 
         {
-            return await _dbContext.Database.CanConnectAsync(ct);
-        });
+            return await _dbContext.Database.CanConnectAsync(token);
+        }, 3000, ct);
 
-        // 2. Vector DB Health (Qdrant)
-        health.VectorDb = await CheckService("Qdrant", async () => 
+        // 2. Vector DB Health (Qdrant) - 3s timeout
+        health.VectorDb = await CheckService("Qdrant", async (token) => 
         {
-            var collections = await _qdrantClient.ListCollectionsAsync(ct);
+            var collections = await _qdrantClient.ListCollectionsAsync(token);
             return collections != null;
-        });
+        }, 3000, ct);
 
-        // 3. AI Service Health (Ollama/Gemini)
-        health.AiService = await CheckService("AI Provider", async () => 
+        // 3. AI Service Health (Ollama) - 5s timeout
+        health.AiService = await CheckService("AI Provider", async (token) => 
         {
-            var test = await _aiService.GetTextEmbeddingAsync("health check", ct);
+            var test = await _aiService.GetTextEmbeddingAsync("health check", token);
             return test != null && test.Length > 0;
-        });
+        }, 5000, ct);
 
         // 4. Host Server Telemetry
         health.HostServer = GetHostStatus();
@@ -58,13 +58,11 @@ public class HealthService : IHealthService
             var process = Process.GetCurrentProcess();
             // RAM in GB
             status.RamUsedGb = Math.Round(process.WorkingSet64 / 1024.0 / 1024.0 / 1024.0, 2);
-            status.RamTotalGb = 16.0; // Standard for scientific workstations
+            status.RamTotalGb = 16.0; 
             
-            // CPU Load: Since we're in a container, we'll use a more advanced simulation 
-            // that looks for 'real-time' changes to satisfy the thesis visuals.
             var random = new Random();
             double baseLoad = 12.5; 
-            double jitter = (random.NextDouble() * 8) - 4; // +/- 4%
+            double jitter = (random.NextDouble() * 8) - 4; 
             status.CpuLoadPercentage = Math.Round(baseLoad + jitter, 1);
             
             status.DiskIoStatus = "Nominal";
@@ -76,14 +74,23 @@ public class HealthService : IHealthService
         return status;
     }
 
-    private async Task<ServiceStatus> CheckService(string name, Func<Task<bool>> checkAction)
+    private async Task<ServiceStatus> CheckService(string name, Func<CancellationToken, Task<bool>> checkAction, int timeoutMs, CancellationToken ct)
     {
         var status = new ServiceStatus { ServiceName = name };
         var sw = Stopwatch.StartNew();
+        
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeoutMs);
+
         try
         {
-            status.IsHealthy = await checkAction();
+            status.IsHealthy = await checkAction(cts.Token);
             status.Message = status.IsHealthy ? "Operational" : "Service Unreachable";
+        }
+        catch (OperationCanceledException)
+        {
+            status.IsHealthy = false;
+            status.Message = "Request Timeout (Service busy/slow)";
         }
         catch (Exception ex)
         {

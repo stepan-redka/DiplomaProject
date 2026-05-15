@@ -5,7 +5,7 @@ namespace Diploma.Application.Interfaces;
 public interface IExportService
 {
     byte[] ExportChatHistoryAsJson(IEnumerable<ChatMessageDto> history);
-    byte[] ExportChatHistoryAsPdf(IEnumerable<ChatMessageDto> history, string userName);
+    byte[] ExportSessionAsPdf(ChatSessionDetailDto session, string userEmail);
     byte[] ExportResearchDataAsCsv(IEnumerable<ChatMessageDto> history);
-    string GetExportFileName(string extension);
+    string GetExportFileName(string extension, string? sessionTitle = null);
 }
