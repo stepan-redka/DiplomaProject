@@ -7,8 +7,8 @@ namespace Diploma.Application.Interfaces;
 /// </summary>
 public interface IRagService
 {
-    Task<IngestResponse> IngestDocumentAsync(string content, string documentName, CancellationToken ct = default);
-    Task<QueryResponse> QueryAsync(string question, Guid? sessionId = null, int? topK = null, Diploma.Domain.Enums.QueryIntent? intent = null, string? modelName = null, CancellationToken ct = default);
+    Task<IngestResponse> IngestDocumentAsync(string content, string documentName, Guid? existingDocumentId = null, CancellationToken ct = default);
+    Task<QueryResponse> QueryAsync(string question, Guid? sessionId = null, int? topK = null, Diploma.Domain.Enums.QueryIntent? intent = null, string? modelName = null, bool isHighFidelity = false, CancellationToken ct = default);
     Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default);
     Task<int> GetDocumentCountAsync(CancellationToken ct = default);
     Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default);

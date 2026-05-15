@@ -19,6 +19,7 @@ public class QueryRequest
     public int TopK { get; set; } = 3;
     public Diploma.Domain.Enums.QueryIntent? Intent { get; set; }
     public string? SelectedModel { get; set; }
+    public bool IsHighFidelity { get; set; } = false;
 }
 
 /// <summary>
