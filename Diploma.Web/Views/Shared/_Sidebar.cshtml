@@ -3,12 +3,12 @@
 <aside id="mainSidebar" class="w-[300px] bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 flex flex-col shrink-0 z-30 transition-all duration-300 overflow-hidden">
     <!-- Sidebar Header: Logo & Controls -->
     <div class="p-6 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <div class="w-7 h-7 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center shadow-lg shadow-black/5 dark:shadow-white/5">
+        <a href="/" class="flex items-center gap-3 group transition-all">
+            <div class="w-7 h-7 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg flex items-center justify-center shadow-lg shadow-black/5 dark:shadow-white/5 group-hover:border-indigo-500/50 group-hover:shadow-indigo-500/10 transition-all">
                 <i data-lucide="microscope" class="w-4 h-4 text-indigo-500"></i>
             </div>
-            <span class="font-bold text-base tracking-tight text-zinc-900 dark:text-white">RagSystem</span>
-        </div>
+            <span class="font-bold text-base tracking-tight text-zinc-900 dark:text-white group-hover:text-indigo-600 transition-colors">RagSystem</span>
+        </a>
     </div>
 
     <nav class="flex-1 px-4 py-2 overflow-hidden flex flex-col gap-6">
@@ -16,10 +16,6 @@
         {
             <!-- Navigation Links -->
             <div class="space-y-1">
-                <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-indigo-600 hover:bg-indigo-500/5 transition-all @(ViewContext.RouteData.Values["controller"]?.ToString() == "Home" ? "text-indigo-600 bg-indigo-500/5 shadow-inner" : "")">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-                    <span>Research Desk</span>
-                </a>
                 <a href="#" data-view="Benchmarks" class="lab-link flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-indigo-600 hover:bg-indigo-500/5 transition-all">
                     <i data-lucide="chart-bar" class="w-5 h-5"></i>
                     <span>Research Lab</span>
@@ -51,7 +47,7 @@
                                     <span class="text-[9px] text-zinc-400 dark:text-zinc-600 font-medium">@session.MessageCount units</span>
                                 </div>
                             </a>
-                            <button onclick="window.ui.handleDeleteSession('@session.Id', this.parentElement)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
+                            <button onclick="window.handleDeleteSession('@session.Id', this.parentElement, event)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
@@ -107,7 +103,7 @@
                                 <span class="text-[11px] text-zinc-500 dark:text-zinc-500 font-medium truncate group-hover:text-zinc-900 dark:group-hover:text-zinc-200">@doc.FileName</span>
                                 <span class="text-[9px] font-mono text-zinc-300 dark:text-zinc-700 ml-auto">@doc.ChunkCount</span>
                             </div>
-                            <button onclick="window.ui.handleDeleteDocument('@doc.Id', this.parentElement)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
+                            <button onclick="window.handleDeleteDocument('@doc.Id', this.parentElement, event)" class="absolute right-3 opacity-0 group-hover:opacity-100 p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
