@@ -13,6 +13,7 @@ class RagUI {
         this.chatWindow = document.getElementById('chatWindow');
         this.chatInput = document.getElementById('chatInput');
         this.sendBtn = document.getElementById('sendBtn');
+        this.exportBtn = document.getElementById('exportBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         this.sourceInspector = document.getElementById('sourceInspector');
         this.inspectorContent = document.getElementById('inspectorContent');
@@ -43,20 +44,21 @@ class RagUI {
 
         // Configure Markdown Renderer
         if (window.marked) {
-            marked.setOptions({
-                highlight: function(code, lang) {
-                    if (Prism.languages[lang]) {
-                        return Prism.highlight(code, Prism.languages[lang], lang);
-                    }
-                    return code;
-                },
+            const markedConfig = {
                 breaks: true,
                 gfm: true
-            });
+            };
+            
+            if (typeof marked.use === 'function') {
+                marked.use(markedConfig);
+            } else if (typeof marked.setOptions === 'function') {
+                marked.setOptions(markedConfig);
+            }
         }
 
         this.initEventListeners();
         this.loadChatHistory();
+        this.updateExportLink();
         
         this.sourceCache = {};
 
@@ -89,10 +91,6 @@ class RagUI {
 
         if (this.toggleSidebarBtn) {
             this.toggleSidebarBtn.onclick = () => this.toggleSidebar();
-        }
-
-        if (this.sidebarCollapseBtn) {
-            this.sidebarCollapseBtn.onclick = () => this.toggleSidebar(true);
         }
 
         // Keyboard Shortcut: Ctrl+B to toggle sidebar
@@ -141,7 +139,22 @@ class RagUI {
             }
         });
         
+        // RE-ATTACH SIDEBAR BUTTONS GLOBALLY
+        window.handleDeleteSession = (sid, el, e) => {
+            if (e) e.stopPropagation();
+            this.handleDeleteSession(sid, el);
+        };
+        window.handleDeleteDocument = (did, el, e) => {
+            if (e) e.stopPropagation();
+            this.handleDeleteDocument(did, el);
+        };
+
         this.initSidebarLinks();
+    }
+
+    handleExport() {
+        if (!this.currentSessionId) return;
+        window.location.href = `/Chat/ExportSession?sessionId=${this.currentSessionId}`;
     }
 
     initSidebarLinks() {
@@ -149,6 +162,9 @@ class RagUI {
         const aside = document.querySelector('aside');
         if (aside) {
             aside.onclick = (e) => {
+                // Ignore if clicking a button (delete)
+                if (e.target.closest('button')) return;
+
                 // Home/Research Desk link
                 const homeLink = e.target.closest('a[href="/"]');
                 if (homeLink) {
@@ -156,12 +172,13 @@ class RagUI {
                     this.currentSessionId = null;
                     window.history.pushState({}, '', '/');
                     this.switchView('chat');
+                    this.updateExportLink();
                     return;
                 }
 
                 // Session Links
                 const sessionLink = e.target.closest('a[href*="sessionId="]');
-                if (sessionLink && !e.target.closest('button')) {
+                if (sessionLink) {
                     e.preventDefault();
                     try {
                         const url = new URL(sessionLink.getAttribute('href'), window.location.origin);
@@ -221,12 +238,152 @@ class RagUI {
                 lucide.createIcons({ root: this.chatWindow });
             }
 
-            // Note: Charts are initialized by the inline script within the partial view (_Benchmarks.cshtml)
+            // --- RESTORE SCIENTIFIC PLOTS ---
+            if (viewName === 'benchmarks') {
+                this.initBenchmarksCharts();
+            }
+
         } catch (error) {
             console.error(error);
             this.chatWindow.innerHTML = `<div class="p-12 text-center text-red-500 font-mono text-xs">ERR_VIEW_LOAD_FAILED: ${error.message}</div>`;
         } finally {
             this.showLoading(false);
+        }
+    }
+
+    initBenchmarksCharts() {
+        const container = document.getElementById('benchmarksData');
+        if (!container) return;
+
+        try {
+            const latencyData = JSON.parse(container.getAttribute('data-latency'));
+            const ingestionData = JSON.parse(container.getAttribute('data-ingestion'));
+            const precisionData = JSON.parse(container.getAttribute('data-precision'));
+            const throughputData = JSON.parse(container.getAttribute('data-throughput'));
+            const correlationData = JSON.parse(container.getAttribute('data-correlation'));
+            const densityData = JSON.parse(container.getAttribute('data-density'));
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(0,0,0,0.03)' }, ticks: { font: { size: 9 } } },
+                    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                }
+            };
+
+            // Dispose old charts if they exist
+            this.charts.forEach(c => c.destroy());
+            this.charts = [];
+
+            // Chart A: Latency
+            const cLatency = new Chart(document.getElementById('chartLatency'), {
+                type: 'bar',
+                data: {
+                    labels: latencyData.map(d => d.modelName),
+                    datasets: [{
+                        data: latencyData.map(d => d.averageLatencyMs),
+                        backgroundColor: '#6366f1',
+                        borderRadius: 8
+                    }]
+                },
+                options: chartOptions
+            });
+            this.charts.push(cLatency);
+
+            // Chart B: Ingestion
+            const cIngestion = new Chart(document.getElementById('chartIngestion'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Efficiency',
+                        data: ingestionData.map(d => ({ x: d.fileSizeBytes / 1024, y: d.processingTimeMs })),
+                        backgroundColor: '#8b5cf6'
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { title: { display: true, text: 'Size (KB)', font: { size: 8 } } },
+                        y: { title: { display: true, text: 'Time (ms)', font: { size: 8 } } }
+                    }
+                }
+            });
+            this.charts.push(cIngestion);
+
+            // Chart C: Precision
+            const cPrecision = new Chart(document.getElementById('chartPrecision'), {
+                type: 'line',
+                data: {
+                    labels: precisionData.map((_, i) => i + 1),
+                    datasets: [{
+                        data: precisionData.map(d => d.maxScore),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: chartOptions
+            });
+            this.charts.push(cPrecision);
+
+            // Chart D: Throughput
+            const cThroughput = new Chart(document.getElementById('chartThroughput'), {
+                type: 'bar',
+                data: {
+                    labels: throughputData.map(d => d.modelName),
+                    datasets: [{
+                        data: throughputData.map(d => d.tokensPerSec),
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 8
+                    }]
+                },
+                options: chartOptions
+            });
+            this.charts.push(cThroughput);
+
+            // Chart E: Correlation
+            const cCorrelation = new Chart(document.getElementById('chartCorrelation'), {
+                type: 'bubble',
+                data: {
+                    datasets: [{
+                        data: correlationData.map(d => ({ x: d.similarityScore, y: d.userEffectiveness, r: 6 })),
+                        backgroundColor: 'rgba(99, 102, 241, 0.5)'
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { min: 0.5, max: 1.0, title: { display: true, text: 'Confidence', font: { size: 8 } } },
+                        y: { min: 0, max: 2, ticks: { stepSize: 1 }, title: { display: true, text: 'Feedback', font: { size: 8 } } }
+                    }
+                }
+            });
+            this.charts.push(cCorrelation);
+
+            // Chart F: Density
+            const cDensity = new Chart(document.getElementById('chartDensity'), {
+                type: 'doughnut',
+                data: {
+                    labels: densityData.map(d => d.documentName),
+                    datasets: [{
+                        data: densityData.map(d => d.chunkCount),
+                        backgroundColor: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    cutout: '70%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+            this.charts.push(cDensity);
+
+        } catch (e) {
+            console.error("Chart initialization failed:", e);
         }
     }
 
@@ -260,6 +417,7 @@ class RagUI {
         });
 
         await this.loadChatHistory();
+        this.updateExportLink();
     }
 
     async loadChatHistory() {
@@ -348,6 +506,7 @@ class RagUI {
                 if (this.sessionList) {
                     this.addSessionToSidebar(data.sessionId, data.sessionTitle || question);
                 }
+                this.updateExportLink();
             }
 
             this.appendMessage('ai', data.answer, data.latencyMs, data.messageId, data.sources);
@@ -355,6 +514,20 @@ class RagUI {
             this.appendMessage('ai', 'Synthesis Error: ' + error.message);
         } finally {
             this.showLoading(false);
+        }
+    }
+
+    updateExportLink() {
+        if (!this.exportBtn) return;
+        
+        if (this.currentSessionId) {
+            this.exportBtn.href = `/Chat/ExportSession?sessionId=${this.currentSessionId}`;
+            this.exportBtn.classList.remove('opacity-50', 'pointer-events-none');
+            this.exportBtn.title = "Export scientific research synthesis";
+        } else {
+            this.exportBtn.href = "#";
+            this.exportBtn.classList.add('opacity-50', 'pointer-events-none');
+            this.exportBtn.title = "Active session required for export";
         }
     }
 
@@ -522,6 +695,7 @@ class RagUI {
                     this.currentSessionId = null;
                     window.history.pushState({}, '', '/');
                     this.renderLobby();
+                    this.updateExportLink();
                 }
             } else {
                 alert('Failed to delete research thread.');
@@ -548,5 +722,4 @@ class RagUI {
         }
     }
 }
-
 document.addEventListener('DOMContentLoaded', () => { window.ui = new RagUI(); });
