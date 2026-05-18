@@ -1,8 +1,13 @@
 using System.Text;
 using Diploma.Application.DTOs;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Chat;
+using Diploma.Application.Interfaces.Documents;
+using Diploma.Application.Interfaces.Identity;
 using Diploma.Domain.Entities;
-using Diploma.Infrastructure.Services;
+using Diploma.Infrastructure.Services.Chat;
+using Diploma.Infrastructure.Services.Documents;
+using Diploma.Infrastructure.Services.Identity;
+using Diploma.Infrastructure.Services.Ingestion;
 using Diploma.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +74,22 @@ public class IngestionBackgroundServiceTests
 
         _mockParsingService.Setup(p => p.ParseDocumentAsync(It.IsAny<Stream>(), fileName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ParsedDocument { Success = true, Content = "Parsed Content" });
+
+        // Mock RagService to simulate successful ingestion and status update
+        _mockRagService.Setup(r => r.IngestDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IngestResponse { Success = true })
+            .Callback<string, string, Guid?, CancellationToken>((content, name, id, ct) =>
+            {
+                if (id.HasValue)
+                {
+                    var doc = _dbContext.Documents.IgnoreQueryFilters().FirstOrDefault(d => d.Id == id.Value);
+                    if (doc != null)
+                    {
+                        doc.Status = Diploma.Domain.Enums.IngestionStatus.Success;
+                        _dbContext.SaveChanges();
+                    }
+                }
+            });
 
         var service = new IngestionBackgroundService(_channel, _mockServiceProvider.Object, _mockLogger.Object);
         

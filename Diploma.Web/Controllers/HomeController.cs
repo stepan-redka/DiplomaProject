@@ -2,7 +2,8 @@ using Diploma.Infrastructure.Utils;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Diploma.Web.Models;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Chat;
+using Diploma.Application.Interfaces.Identity;
 using Diploma.Application.DTOs;
 using Microsoft.AspNetCore.Authorization;
 

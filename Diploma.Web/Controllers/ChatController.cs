@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Chat;
+using Diploma.Application.Interfaces.Documents;
+using Diploma.Application.Interfaces.Identity;
 using Diploma.Application.DTOs;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
@@ -57,7 +59,6 @@ public class ChatController : Controller
     [HttpGet]
     public async Task<IActionResult> GetHistory()
     {
-        // Legacy endpoint - redirecting or maintaining for basic history
         if (!_currentUserService.IsAuthenticated) return Unauthorized();
 
         try
@@ -83,8 +84,8 @@ public class ChatController : Controller
         }
 
         var sw = Stopwatch.StartNew();
-        _logger.LogInformation("Processing RAG query (User: {UserId}). Session: {SessionId}, Model: {Model}, HighFidelity: {HighFidelity}", 
-            _currentUserService.UserId, request.SessionId, request.SelectedModel ?? "Default", request.IsHighFidelity);
+        _logger.LogInformation("Processing RAG query (User: {UserId}). Session: {SessionId}, Model: {Model}, Intent: {Intent}, HighFidelity: {HiFi}", 
+            _currentUserService.UserId, request.SessionId, request.SelectedModel ?? "Default", request.Intent, request.IsHighFidelity);
 
         try
         {
@@ -93,7 +94,7 @@ public class ChatController : Controller
                 request.SessionId, 
                 request.TopK, 
                 request.Intent, 
-                request.SelectedModel, 
+                request.SelectedModel,
                 request.IsHighFidelity);
             sw.Stop();
 
@@ -165,7 +166,6 @@ public class ChatController : Controller
             var session = await _chatHistoryService.GetSessionDetailsAsync(sessionId);
             if (session == null) return NotFound("The requested research session could not be found.");
 
-            // Prevent export of empty sessions
             if (session.Messages == null || !session.Messages.Any(m => m.Content.Length >= 15))
             {
                 return BadRequest("This research thread is currently empty or contains insufficient data for synthesis. Please conduct further research before exporting.");
@@ -197,4 +197,4 @@ public class ChatController : Controller
             return StatusCode(500, "An internal error occurred during synthesis generation.");
         }
     }
-    }
+}

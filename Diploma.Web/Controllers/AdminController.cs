@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Diploma.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Diploma.Application.DTOs;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Analytics;
+using Diploma.Application.Interfaces.Chat;
 using Diploma.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 

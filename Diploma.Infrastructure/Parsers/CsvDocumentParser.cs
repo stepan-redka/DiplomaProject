@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Documents;
 using Diploma.Domain.Entities;
 using Diploma.Domain.Enums;
 using Microsoft.Extensions.Logging;

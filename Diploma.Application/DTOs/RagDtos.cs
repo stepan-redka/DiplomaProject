@@ -19,7 +19,7 @@ public class QueryRequest
     public int TopK { get; set; } = 3;
     public Diploma.Domain.Enums.QueryIntent? Intent { get; set; }
     public string? SelectedModel { get; set; }
-    public bool IsHighFidelity { get; set; } = false;
+    public bool IsHighFidelity { get; set; }
 }
 
 /// <summary>
@@ -129,3 +129,20 @@ public class ChatMessageDto
     /// </summary>
     public int TokenCount { get; set; }
 }
+
+public class ResearchAnalyticsDto
+{
+    public List<ModelLatencyData> ModelLatency { get; set; } = new();
+    public List<IngestionData> IngestionEfficiency { get; set; } = new();
+    public List<PrecisionData> SemanticPrecision { get; set; } = new();
+    public List<ThroughputData> GenerationThroughput { get; set; } = new();
+    public List<CorrelationData> MathHumanCorrelation { get; set; } = new();
+    public List<DensityData> KnowledgeDensity { get; set; } = new();
+}
+
+public class ModelLatencyData { public string ModelName { get; set; } = ""; public double AvgLatencyMs { get; set; } }
+public class IngestionData { public long FileSizeBytes { get; set; } public double ProcessingTimeMs { get; set; } public string FileName { get; set; } = ""; }
+public class PrecisionData { public DateTime Timestamp { get; set; } public double Score { get; set; } }
+public class ThroughputData { public string ModelName { get; set; } = ""; public double TokensPerSec { get; set; } }
+public class CorrelationData { public double Score { get; set; } public int Feedback { get; set; } }
+public class DensityData { public string DocName { get; set; } = ""; public int Chunks { get; set; } }

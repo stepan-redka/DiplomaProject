@@ -1,5 +1,5 @@
 using Diploma.Application.DTOs;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Storage;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using Microsoft.Extensions.Logging;

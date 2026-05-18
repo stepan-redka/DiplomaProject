@@ -1,4 +1,4 @@
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Identity;
 using Diploma.Domain.Interfaces;
 using Diploma.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;

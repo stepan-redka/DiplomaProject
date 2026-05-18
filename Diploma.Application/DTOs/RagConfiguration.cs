@@ -19,9 +19,11 @@ public class QdrantSettings
     public string Host { get; set; } = "localhost";
     public int Port { get; set; } = 6334;
     public string CollectionName { get; set; } = "documents";
+    public string CacheCollectionName { get; set; } = "cached_queries";
     public int VectorSize { get; set; } = 768; // nomic-embed-text dimension
     public int DefaultTopK { get; set; } = 5;
     public double SimilarityThreshold { get; set; } = 0.40;
+    public double CacheSimilarityThreshold { get; set; } = 0.95;
 }
 
 /// <summary>

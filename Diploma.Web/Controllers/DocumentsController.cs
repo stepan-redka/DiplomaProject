@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Chat;
+using Diploma.Application.Interfaces.Identity;
 using Diploma.Application.DTOs;
 using Microsoft.AspNetCore.Authorization;
-using Diploma.Infrastructure.Services;
+using Diploma.Infrastructure.Services.Chat;
+using Diploma.Infrastructure.Services.Identity;
+using Diploma.Infrastructure.Services.Ingestion;
 using Microsoft.IO;
 
 namespace Diploma.Web.Controllers;

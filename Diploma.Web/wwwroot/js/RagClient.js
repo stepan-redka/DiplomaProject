@@ -4,11 +4,11 @@
  * Encapsulates all network communication.
  */
 export class RagClient {
-    async ask(question, sessionId = null, topK = 3, intent = 1, selectedModel = null) {
+    async ask(question, sessionId = null, topK = 3, intent = null, selectedModel = null, isHighFidelity = false) {
         const response = await fetch('/Chat/Ask', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, sessionId, topK, intent, selectedModel })
+            body: JSON.stringify({ question, sessionId, topK, intent, selectedModel, isHighFidelity })
         });
         if (!response.ok) throw new Error('Query failed');
         return await response.json();

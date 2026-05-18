@@ -1,5 +1,5 @@
 using System.Text;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Documents;
 using Diploma.Domain.Entities;
 using Diploma.Domain.Enums;
 using DocumentFormat.OpenXml.Packaging;

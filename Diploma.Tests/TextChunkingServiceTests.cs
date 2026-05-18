@@ -1,4 +1,4 @@
-using Diploma.Infrastructure.Services;
+using Diploma.Infrastructure.Services.Documents;
 using Xunit;
 
 namespace Diploma.Tests;

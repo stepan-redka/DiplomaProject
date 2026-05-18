@@ -4,11 +4,19 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Diploma.Application.DTOs;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.AI;
+using Diploma.Application.Interfaces.Analytics;
+using Diploma.Application.Interfaces.Documents;
+using Diploma.Application.Interfaces.Identity;
+using Diploma.Application.Interfaces.Storage;
 using Diploma.Domain.Entities;
 using Diploma.Domain.Enums;
 using Diploma.Infrastructure.Persistence;
-using Diploma.Infrastructure.Services;
+using Diploma.Infrastructure.Services.AI;
+using Diploma.Infrastructure.Services.Analytics;
+using Diploma.Infrastructure.Services.Chat;
+using Diploma.Infrastructure.Services.Documents;
+using Diploma.Infrastructure.Services.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -29,6 +37,7 @@ public class RagServiceTests
     private readonly Mock<IPromptRegistry> _mockPromptRegistry;
     private readonly Mock<IEvaluationService> _mockEvaluationService;
     private readonly Mock<ITokenizerService> _mockTokenizerService;
+    private readonly Mock<ISemanticCacheService> _mockSemanticCache;
     private readonly Mock<ILogger<RagService>> _mockLogger;
     private readonly RagConfiguration _config;
     private readonly ApplicationDbContext _dbContext;
@@ -46,6 +55,7 @@ public class RagServiceTests
         _mockPromptRegistry = new Mock<IPromptRegistry>();
         _mockEvaluationService = new Mock<IEvaluationService>();
         _mockTokenizerService = new Mock<ITokenizerService>();
+        _mockSemanticCache = new Mock<ISemanticCacheService>();
         _mockLogger = new Mock<ILogger<RagService>>();
 
         _config = new RagConfiguration
@@ -76,6 +86,7 @@ public class RagServiceTests
             _mockChunker.Object,
             _mockVectorDb.Object,
             _config,
+            _mockSemanticCache.Object,
             _mockLogger.Object);
     }
 
@@ -125,10 +136,10 @@ public class RagServiceTests
         var service = CreateService();
 
         // Act
-        await service.QueryAsync("What is RAG?", null, 3, null, null, true);
+        await service.QueryAsync("What is RAG?", null, 3, null, null, false);
 
         // Assert
-        _mockIntentResolver.Verify(i => i.ResolveAsync("What is RAG?", true, true, It.IsAny<CancellationToken>()), Times.Once);
+        _mockIntentResolver.Verify(i => i.ResolveAsync("What is RAG?", false, true, It.IsAny<CancellationToken>()), Times.Once);
         _mockRetrievalService.Verify(r => r.GetRelevantContextAsync("What is RAG?", userId, 3, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Analytics;
+using Diploma.Application.Interfaces.Chat;
+using Diploma.Application.Interfaces.Documents;
 using Microsoft.AspNetCore.Authorization;
 using Diploma.Web.Models;
 using Diploma.Infrastructure.Utils;
@@ -71,7 +73,7 @@ public class LabController : Controller
 
             return File(csvBytes, "text/csv", fileName);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, "Error exporting research data.");
         }

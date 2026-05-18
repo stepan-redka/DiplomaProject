@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using Diploma.Web.Models.Account;
-using Diploma.Application.Interfaces;
+using Diploma.Application.Interfaces.Chat;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Diploma.Web.Controllers;

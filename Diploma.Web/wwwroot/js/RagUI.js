@@ -487,7 +487,7 @@ class RagUI {
         if (!question) return;
 
         const topK = this.topKRange ? parseInt(this.topKRange.value) : 3;
-        const intent = this.researchModeToggle && this.researchModeToggle.checked ? 1 : 0;
+        const isHighFidelity = this.researchModeToggle && this.researchModeToggle.checked;
         const selectedModel = this.modelSelector ? this.modelSelector.value : null;
 
         if (this.chatWindow.querySelector('.py-32')) this.chatWindow.innerHTML = '';
@@ -498,7 +498,7 @@ class RagUI {
         this.showLoading(true);
 
         try {
-            const data = await this.client.ask(question, this.currentSessionId, topK, intent, selectedModel);
+            const data = await this.client.ask(question, this.currentSessionId, topK, null, selectedModel, isHighFidelity);
             
             if (!this.currentSessionId && data.sessionId) {
                 this.currentSessionId = data.sessionId;

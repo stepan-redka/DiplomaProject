@@ -20,7 +20,8 @@ WORKDIR /app
 COPY --from=build /out .
 
 # Use a non-root user for security
-RUN adduser -u 1000 -D appuser
+RUN adduser -u 1000 -D appuser && \
+    chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8080
