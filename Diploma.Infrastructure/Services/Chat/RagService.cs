@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces.AI;
 using Diploma.Application.Interfaces.Analytics;
@@ -17,7 +19,7 @@ namespace Diploma.Infrastructure.Services.Chat;
 public class RagService : IRagService
 {
     private const string NoContextMessage = "No relevant documents found.";
-    
+
     private readonly ApplicationDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<RagService> _logger;
@@ -76,28 +78,31 @@ public class RagService : IRagService
         var sw = Stopwatch.StartNew();
         try
         {
+            var session = await GetOrCreateSessionAsync(sessionId, question, modelName, ct);
+            var allowedDocumentIds = session.RelatedDocumentIds;
+            session.SelectedModel = string.IsNullOrWhiteSpace(modelName) ? session.SelectedModel : modelName;
+            session.LastUpdatedAt = DateTime.UtcNow;
+
             // --- STEP 1: SEMANTIC CACHE CHECK ---
-            var cachedAnswer = await _semanticCache.GetCachedResponseAsync(question, ct);
+            var cachedAnswer = await _semanticCache.GetCachedResponseAsync(question, allowedDocumentIds, ct);
             if (cachedAnswer != null)
             {
                 _logger.LogInformation("Semantic Cache Hit - Bypassing RAG pipeline for: {Question}", question);
-                var cachedSession = await GetOrCreateSessionAsync(sessionId, question, modelName, ct);
-                _dbContext.ChatMessages.Add(new ChatMessage { UserId = userId, ChatSessionId = cachedSession.Id, Role = "user", Content = question });
+                _dbContext.ChatMessages.Add(new ChatMessage { UserId = userId, ChatSessionId = session.Id, Role = "user", Content = question });
 
-                var cachedMsgId = await SaveAssistantMessageAsync(cachedSession.Id, cachedAnswer, null, modelName, sw.ElapsedMilliseconds, ct);
+                var cachedMsgId = await SaveAssistantMessageAsync(session.Id, cachedAnswer, null, modelName, sw.ElapsedMilliseconds, ct);
 
                 return new QueryResponse
                 {
                     MessageId = cachedMsgId,
-                    SessionId = cachedSession.Id,
-                    SessionTitle = cachedSession.Title,
+                    SessionId = session.Id,
+                    SessionTitle = session.Title,
                     Answer = cachedAnswer,
                     ProcessingTimeMs = sw.ElapsedMilliseconds
                 };
             }
 
             // --- STEP 2: CACHE MISS - NORMAL PIPELINE ---
-            var session = await GetOrCreateSessionAsync(sessionId, question, modelName, ct);
             _dbContext.ChatMessages.Add(new ChatMessage { UserId = userId, ChatSessionId = session.Id, Role = "user", Content = question });
 
             var docCount = await _documentService.GetDocumentCountAsync(ct);
@@ -109,14 +114,28 @@ public class RagService : IRagService
                 var answer = await _aiService.GenerateAnswerAsync(prompt, modelName, ct);
 
                 // --- STEP 3: ASYNC CACHE SAVE ---
-                _ = _semanticCache.SaveToCacheAsync(question, answer, ct);
+                // CONCURRENCY NOTE: CancellationToken.None is intentional — this fire-and-forget
+                // write must outlive the HTTP request lifecycle. Using the request ct would cause
+                // silent cancellation the moment the client's response is flushed.
+                _ = _semanticCache.SaveToCacheAsync(question, answer, allowedDocumentIds, CancellationToken.None);
 
                 var messageId = await SaveAssistantMessageAsync(session.Id, answer, null, modelName, sw.ElapsedMilliseconds, ct);
 
                 return new QueryResponse { MessageId = messageId, SessionId = session.Id, SessionTitle = session.Title, Answer = answer, ProcessingTimeMs = sw.ElapsedMilliseconds };
             }
 
-            var sources = await _retrievalService.GetRelevantContextAsync(question, userId, topK, ct);
+            // Passing the session-specific related document IDs for scoped retrieval
+            if (allowedDocumentIds.Any())
+            {
+                _logger.LogInformation("Scoping RAG retrieval to {Count} bound documents for session {SessionId}",
+                    allowedDocumentIds.Count, session.Id);
+            }
+            else
+            {
+                _logger.LogInformation("No documents bound to session {SessionId}. Searching entire user registry.", session.Id);
+            }
+
+            var sources = await _retrievalService.GetRelevantContextAsync(question, topK, allowedDocumentIds, ct);
             var contextText = sources.Any()
                 ? string.Join("\n---\n", sources.Select(s => $"[Source: {s.SourceDocument}] {s.Content}"))
                 : NoContextMessage;
@@ -125,7 +144,8 @@ public class RagService : IRagService
             var ragAnswer = await _aiService.GenerateAnswerAsync(ragPrompt, modelName, ct);
 
             // --- STEP 3: ASYNC CACHE SAVE ---
-            _ = _semanticCache.SaveToCacheAsync(question, ragAnswer, ct);
+            // CONCURRENCY NOTE: CancellationToken.None is intentional (see above).
+            _ = _semanticCache.SaveToCacheAsync(question, ragAnswer, allowedDocumentIds, CancellationToken.None);
 
             var assistantMessageId = await SaveAssistantMessageAsync(session.Id, ragAnswer, sources, modelName, sw.ElapsedMilliseconds, ct);
 
@@ -161,18 +181,48 @@ public class RagService : IRagService
             }
             if (document == null)
             {
-                document = new Document { Id = documentId, FileName = documentName, UserId = userId, Status = IngestionStatus.Processing, CreatedAt = DateTime.UtcNow };
+                document = new Document { Id = documentId, FileName = documentName, UserId = userId, Status = IngestionStatus.Success, CreatedAt = DateTime.UtcNow };
                 _dbContext.Documents.Add(document);
             }
+            else
+            {
+                var existingChunks = await _dbContext.DocumentChunks
+                    .Where(c => c.DocumentId == document.Id)
+                    .ToListAsync(ct);
+                _dbContext.DocumentChunks.RemoveRange(existingChunks);
+            }
+
+            document.Content = content;
+            if (document.FileSizeBytes <= 0)
+            {
+                document.FileSizeBytes = Encoding.UTF8.GetByteCount(content);
+            }
+            document.ProcessingTimeMs = 0;
+            document.Status = IngestionStatus.Processing;
+
             await _dbContext.SaveChangesAsync(ct);
             var embeddings = await _aiService.GetTextEmbeddingsAsync(textChunks, ct);
             var vectorDataList = new List<VectorData>();
             for (int i = 0; i < textChunks.Count; i++)
             {
-                vectorDataList.Add(new VectorData(Guid.NewGuid(), document.Id, embeddings[i], textChunks[i], new Dictionary<string, object> { { "source", documentName } }));
+                var chunkId = Guid.NewGuid();
+                vectorDataList.Add(new VectorData(chunkId, document.Id, embeddings[i], textChunks[i], new Dictionary<string, object>
+                {
+                    { "source", documentName },
+                    { "chunk_index", i.ToString() }
+                }));
+                _dbContext.DocumentChunks.Add(new DocumentChunk
+                {
+                    Id = chunkId,
+                    DocumentId = document.Id,
+                    Content = textChunks[i],
+                    ChunkIndex = i,
+                    CreatedAt = DateTime.UtcNow
+                });
             }
             await _vectorDb.UpsertChunksAsync(_config.Qdrant.CollectionName, vectorDataList, userId, ct);
             document.Status = IngestionStatus.Success;
+            document.ProcessingTimeMs = sw.ElapsedMilliseconds;
             await _dbContext.SaveChangesAsync(ct);
             return new IngestResponse { Success = true, Message = "Document ingested successfully.", ChunksCreated = textChunks.Count };
         }
@@ -183,55 +233,75 @@ public class RagService : IRagService
         }
     }
 
-    public async Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default) 
-    { 
+    public async Task<bool> EnsureCollectionExistsAsync(CancellationToken ct = default)
+    {
         await _vectorDb.EnsureCollectionExistsAsync(_config.Qdrant.CollectionName, _config.Qdrant.VectorSize, ct);
         return true;
     }
 
     public async Task<int> GetDocumentCountAsync(CancellationToken ct = default) => await _dbContext.Documents.CountAsync(ct);
 
-    public async Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default) => 
+    public async Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default) =>
         await _dbContext.Documents.Select(d => new DocumentDto { Id = d.Id, FileName = d.FileName }).ToListAsync(ct);
 
-    public async Task<bool> ClearCollectionAsync(CancellationToken ct = default) 
-    { 
-        var docs = await _dbContext.Documents.ToListAsync(ct); 
-        _dbContext.Documents.RemoveRange(docs); 
-        await _dbContext.SaveChangesAsync(ct); 
+    public async Task<bool> ClearCollectionAsync(CancellationToken ct = default)
+    {
+        var docs = await _dbContext.Documents.ToListAsync(ct);
+        _dbContext.Documents.RemoveRange(docs);
+        await _dbContext.SaveChangesAsync(ct);
         await _vectorDb.DeleteUserVectorsAsync(_config.Qdrant.CollectionName, userId, ct);
         return true;
     }
 
-    public async Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken ct = default) 
-    { 
-        var d = await _dbContext.Documents.FindAsync(new object[] { documentId }, ct); 
-        if (d == null) return false; 
-        _dbContext.Documents.Remove(d); 
-        await _dbContext.SaveChangesAsync(ct); 
-        return true; 
+    public async Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken ct = default)
+    {
+        var userId = _currentUserService.UserId;
+        if (string.IsNullOrEmpty(userId)) return false;
+
+        // SECURITY: Do NOT use FindAsync here — it checks the in-memory identity map first
+        // and can bypass the HasQueryFilter in cached-entity scenarios.
+        var d = await _dbContext.Documents.FirstOrDefaultAsync(doc => doc.Id == documentId && doc.UserId == userId, ct);
+        if (d == null) return false;
+
+        _dbContext.Documents.Remove(d);
+        await _dbContext.SaveChangesAsync(ct);
+        return true;
     }
 
-    public async Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default) => 
-        await Task.FromResult(new List<StoredChunkInfo>());
+    public Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default) =>
+        Task.FromResult(new List<StoredChunkInfo>());
 
-    public async Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds, CancellationToken ct = default) => 
-        await Task.FromResult(0);
+    public Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds, CancellationToken ct = default) =>
+        Task.FromResult(0);
 
-    public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default) => 
+    public async Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default) =>
         await _dbContext.ChatMessages.Select(m => new ChatMessageDto { Id = m.Id, Content = m.Content }).ToListAsync(ct);
 
-    public async Task<bool> SetFeedbackAsync(Guid messageId, int effectiveness, CancellationToken ct = default) => 
-        await Task.FromResult(true);
+    public Task<bool> SetFeedbackAsync(Guid messageId, int effectiveness, CancellationToken ct = default) =>
+        Task.FromResult(true);
 
-    public async Task<int> GetTotalQueriesAsync(CancellationToken ct = default) => await _dbContext.ChatMessages.CountAsync(ct);
-    public async Task<long> GetStorageUsedAsync(CancellationToken ct = default) => await Task.FromResult(0L);
-    public async Task<ResearchAnalyticsDto> GetAnalyticsAsync(CancellationToken ct = default) => await Task.FromResult(new ResearchAnalyticsDto());
+    public async Task<int> GetTotalQueriesAsync(CancellationToken ct = default) => await _analyticsService.GetTotalQueriesAsync(userId, ct);
+    public async Task<long> GetStorageUsedAsync(CancellationToken ct = default) => await _analyticsService.GetStorageUsedAsync(userId, ct);
+    public async Task<ResearchAnalyticsDto> GetAnalyticsAsync(CancellationToken ct = default) => await _analyticsService.GetAnalyticsAsync(userId, ct);
 
     private async Task<ChatSession> GetOrCreateSessionAsync(Guid? sessionId, string firstQuestion, string? modelName, CancellationToken ct)
     {
-        if (sessionId.HasValue) { var s = await _dbContext.ChatSessions.FindAsync(new object[] { sessionId.Value }, ct); if (s != null) return s; }
-        var session = new ChatSession { Id = sessionId ?? Guid.NewGuid(), UserId = userId, Title = firstQuestion, CreatedAt = DateTime.UtcNow };
+        if (sessionId.HasValue)
+        {
+            var s = await _dbContext.ChatSessions
+                .Include(s => s.Messages)
+                .FirstOrDefaultAsync(s => s.Id == sessionId.Value, ct);
+            if (s != null) return s;
+        }
+        var session = new ChatSession
+        {
+            Id = sessionId ?? Guid.NewGuid(),
+            UserId = userId,
+            Title = firstQuestion,
+            CreatedAt = DateTime.UtcNow,
+            LastUpdatedAt = DateTime.UtcNow,
+            SelectedModel = string.IsNullOrWhiteSpace(modelName) ? _config.Ollama.ChatModel : modelName
+        };
         _dbContext.ChatSessions.Add(session);
         await _dbContext.SaveChangesAsync(ct);
         return session;
@@ -239,7 +309,17 @@ public class RagService : IRagService
 
     private async Task<Guid> SaveAssistantMessageAsync(Guid sessionId, string content, List<SourceCitation>? sources, string? modelName, double latencyMs, CancellationToken ct)
     {
-        var m = new ChatMessage { UserId = userId, ChatSessionId = sessionId, Role = "assistant", Content = content, ProcessingTimeMs = latencyMs };
+        var m = new ChatMessage
+        {
+            UserId = userId,
+            ChatSessionId = sessionId,
+            Role = "assistant",
+            Content = content,
+            Metadata = sources == null ? null : JsonSerializer.Serialize(sources),
+            ModelName = string.IsNullOrWhiteSpace(modelName) ? _config.Ollama.ChatModel : modelName,
+            ProcessingTimeMs = latencyMs,
+            TokenCount = _tokenizerService.GetTokenCount(content)
+        };
         _dbContext.ChatMessages.Add(m);
         await _dbContext.SaveChangesAsync(ct);
         return m.Id;

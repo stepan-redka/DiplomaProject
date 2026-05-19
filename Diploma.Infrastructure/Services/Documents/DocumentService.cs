@@ -15,8 +15,8 @@ public class DocumentService : IDocumentService
     private readonly ILogger<DocumentService> _logger;
 
     public DocumentService(
-        ApplicationDbContext dbContext, 
-        IVectorDatabase vectorDb, 
+        ApplicationDbContext dbContext,
+        IVectorDatabase vectorDb,
         RagConfiguration config,
         ILogger<DocumentService> logger)
     {
@@ -31,14 +31,14 @@ public class DocumentService : IDocumentService
     public async Task<List<DocumentDto>> GetUserDocumentsAsync(CancellationToken ct = default)
     {
         return await _dbContext.Documents
-            .Select(d => new DocumentDto 
-            { 
-                Id = d.Id, 
-                FileName = d.FileName, 
-                CreatedAt = d.CreatedAt, 
-                ChunkCount = d.Chunks.Count, 
-                FileSizeBytes = d.FileSizeBytes, 
-                ProcessingTimeMs = d.ProcessingTimeMs 
+            .Select(d => new DocumentDto
+            {
+                Id = d.Id,
+                FileName = d.FileName,
+                CreatedAt = d.CreatedAt,
+                ChunkCount = d.Chunks.Count,
+                FileSizeBytes = d.FileSizeBytes,
+                ProcessingTimeMs = d.ProcessingTimeMs
             })
             .ToListAsync(ct);
     }
@@ -69,12 +69,12 @@ public class DocumentService : IDocumentService
             .Include(c => c.Document)
             .OrderByDescending(c => c.CreatedAt)
             .Take(limit)
-            .Select(c => new StoredChunkInfo 
-            { 
-                Id = c.Id.ToString(), 
-                SourceDocument = c.Document.FileName, 
-                ContentPreview = c.Content.Length > 100 ? c.Content.Substring(0, 100) + "..." : c.Content, 
-                ChunkIndex = c.ChunkIndex 
+            .Select(c => new StoredChunkInfo
+            {
+                Id = c.Id.ToString(),
+                SourceDocument = c.Document.FileName,
+                ContentPreview = c.Content.Length > 100 ? c.Content.Substring(0, 100) + "..." : c.Content,
+                ChunkIndex = c.ChunkIndex
             })
             .ToListAsync(ct);
     }
@@ -85,7 +85,7 @@ public class DocumentService : IDocumentService
         var chunksToDelete = await _dbContext.DocumentChunks.Where(c => guids.Contains(c.Id)).ToListAsync(ct);
         if (!chunksToDelete.Any()) return 0;
 
-        foreach (var group in chunksToDelete.GroupBy(c => c.DocumentId)) 
+        foreach (var group in chunksToDelete.GroupBy(c => c.DocumentId))
         {
             await _vectorDb.DeleteDocumentVectorsAsync(_config.Qdrant.CollectionName, group.Key, userId, ct);
         }

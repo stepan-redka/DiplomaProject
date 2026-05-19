@@ -45,10 +45,10 @@ public class IngestionBackgroundService : BackgroundService
             try
             {
                 _logger.LogInformation("Background processing started for: {FileName} (User: {UserId})", task.FileName, task.UserId);
-                
+
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                
+
                 // 1. Set the background user context FIRST (Critical for Multi-tenant SaveChanges)
                 var userService = scope.ServiceProvider.GetRequiredService<ICurrentUserService>() as CurrentUserService;
                 userService?.SetManualUserId(task.UserId);
@@ -61,7 +61,8 @@ public class IngestionBackgroundService : BackgroundService
                     FileName = task.FileName,
                     Status = IngestionStatus.Processing,
                     CreatedAt = DateTime.UtcNow,
-                    Content = "[Processing...]"
+                    Content = "[Processing...]",
+                    FileSizeBytes = task.FileData.LongLength
                 };
                 dbContext.Documents.Add(document);
                 await dbContext.SaveChangesAsync(stoppingToken);
@@ -77,7 +78,7 @@ public class IngestionBackgroundService : BackgroundService
                 {
                     // 4. Ingest into RAG pipeline (Pass existing documentId to prevent duplication)
                     await ragService.IngestDocumentAsync(parsedDoc.Content, task.FileName, documentId, stoppingToken);
-                    
+
                     _logger.LogInformation("Successfully background-indexed: {FileName}", task.FileName);
                 }
                 else
@@ -92,7 +93,7 @@ public class IngestionBackgroundService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Fatal error processing background task for {FileName}", task.FileName);
-                
+
                 // Persist failure to DB for Admin Telemetry
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -101,7 +102,7 @@ public class IngestionBackgroundService : BackgroundService
                 {
                     doc.Status = IngestionStatus.Failed;
                     doc.ErrorMessage = ex.Message;
-                    await dbContext.SaveChangesAsync();
+                    await dbContext.SaveChangesAsync(stoppingToken);
                 }
             }
         }

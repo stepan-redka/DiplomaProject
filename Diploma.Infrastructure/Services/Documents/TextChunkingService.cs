@@ -43,7 +43,7 @@ public class TextChunkingService : ITextChunkingService
         }
 
         // Split the text by the chosen separator
-        var splits = separator != null 
+        var splits = separator != null
             ? text.Split(new[] { separator }, StringSplitOptions.None)
             : new[] { text };
 
@@ -83,7 +83,7 @@ public class TextChunkingService : ITextChunkingService
             {
                 // Current accumulator is full, save it and start new one with overlap
                 finalChunks.Add(CombineChunks(currentChunk, overlap));
-                
+
                 // Keep some pieces for overlap
                 var overlapPieces = GetOverlapPieces(currentChunk, overlap);
                 currentChunk = overlapPieces;
@@ -113,10 +113,10 @@ public class TextChunkingService : ITextChunkingService
     private List<string> GetOverlapPieces(List<string> pieces, int overlap)
     {
         if (overlap <= 0) return new List<string>();
-        
+
         var result = new List<string>();
         int length = 0;
-        
+
         for (int i = pieces.Count - 1; i >= 0; i--)
         {
             if (length + pieces[i].Length <= overlap)
@@ -129,7 +129,7 @@ public class TextChunkingService : ITextChunkingService
                 break;
             }
         }
-        
+
         return result;
     }
 
