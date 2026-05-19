@@ -24,7 +24,7 @@ void TrainModel(string json, string output)
         return;
     }
 
-    try 
+    try
     {
         ModelTrainer.TrainAndSaveModel(json, output);
         Console.WriteLine("--- Success: Model generated successfully ---");
@@ -51,7 +51,7 @@ void InspectModel(string modelPath)
         var predictionEngine = mlContext.Model.CreatePredictionEngine<IntentData, IntentPrediction>(trainedModel);
 
         Console.WriteLine("Model loaded successfully. Type a query to test intent (or 'exit' to quit):");
-        
+
         while (true)
         {
             Console.Write("\nQuery > ");
@@ -59,9 +59,9 @@ void InspectModel(string modelPath)
             if (string.IsNullOrWhiteSpace(input) || input.ToLower() == "exit") break;
 
             var prediction = predictionEngine.Predict(new IntentData { Text = input });
-            
+
             Console.WriteLine($"Result: [Intent: {prediction.PredictedLabel}]");
-            
+
             // Note: In Multi-class SDCA, Score is the raw logits or probabilities depending on the output layer.
             // For SDCA Maximum Entropy, it's usually probabilities.
             if (prediction.Score != null && prediction.Score.Length > 0)

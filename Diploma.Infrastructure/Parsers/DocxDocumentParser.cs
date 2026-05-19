@@ -38,8 +38,8 @@ public class DocxDocumentParser : IDocumentParser
 
             // OpenXml is synchronous, but we can check cancellation in loops
             using var wordDocument = WordprocessingDocument.Open(memoryStream, false);
-            var body = wordDocument.MainDocumentPart?.Document.Body;
-            
+            var body = wordDocument.MainDocumentPart?.Document?.Body;
+
             if (body == null)
             {
                 _logger.LogWarning("DOCX document has no body: {FileName}", fileName);

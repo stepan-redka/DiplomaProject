@@ -35,7 +35,7 @@ public class HtmlDocumentParser : IDocumentParser
             var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
-            _logger.LogInformation("Successfully parsed HTML {FileName} in {ElapsedMs}ms. Length: {Length}", 
+            _logger.LogInformation("Successfully parsed HTML {FileName} in {ElapsedMs}ms. Length: {Length}",
                 fileName, sw.ElapsedMilliseconds, content.Length);
 
             return new ParsedDocument
@@ -55,7 +55,7 @@ public class HtmlDocumentParser : IDocumentParser
         {
             sw.Stop();
             _logger.LogError(ex, "Failed to parse HTML document: {FileName} after {ElapsedMs}ms", fileName, sw.ElapsedMilliseconds);
-            
+
             return new ParsedDocument
             {
                 Success = false,

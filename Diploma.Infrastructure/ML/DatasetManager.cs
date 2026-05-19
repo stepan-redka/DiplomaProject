@@ -24,7 +24,7 @@ public static class DatasetManager
             // Combine "train" and "oos_train" keys
             if (root.TryGetProperty("train", out var trainArray))
                 ProcessJsonArray(trainArray, data);
-            
+
             if (root.TryGetProperty("oos_train", out var oosArray))
                 ProcessJsonArray(oosArray, data);
 
@@ -47,14 +47,14 @@ public static class DatasetManager
             {
                 string text = item[0].GetString() ?? "";
                 string rawLabel = item[1].GetString() ?? "";
-                
+
                 // Semantic Binary Mapping
                 string mappedLabel = MapToSystemIntent(rawLabel);
 
-                dataList.Add(new IntentData 
-                { 
-                    Text = text, 
-                    Label = mappedLabel 
+                dataList.Add(new IntentData
+                {
+                    Text = text,
+                    Label = mappedLabel
                 });
             }
         }

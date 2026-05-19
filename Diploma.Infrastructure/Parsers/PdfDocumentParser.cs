@@ -62,7 +62,7 @@ public class PdfDocumentParser : IDocumentParser
 
             sw.Stop();
             var content = textBuilder.ToString().Trim();
-            _logger.LogInformation("Successfully parsed PDF {FileName} in {ElapsedMs}ms. Length: {Length} characters, Pages: {PageCount}", 
+            _logger.LogInformation("Successfully parsed PDF {FileName} in {ElapsedMs}ms. Length: {Length} characters, Pages: {PageCount}",
                 fileName, sw.ElapsedMilliseconds, content.Length, document.NumberOfPages);
 
             return new ParsedDocument

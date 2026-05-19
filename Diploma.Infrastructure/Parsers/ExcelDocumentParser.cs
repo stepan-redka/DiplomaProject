@@ -28,7 +28,7 @@ public class ExcelDocumentParser : IDocumentParser
 
     public DocumentType GetDocumentType(string fileName) => DocumentType.Excel;
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
+    public Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName, CancellationToken ct = default)
     {
         _logger.LogInformation("Parsing Excel document: {FileName}", fileName);
         var sw = Stopwatch.StartNew();
@@ -68,16 +68,16 @@ public class ExcelDocumentParser : IDocumentParser
 
             sw.Stop();
             var content = textBuilder.ToString().Trim();
-            _logger.LogInformation("Successfully parsed Excel {FileName} in {ElapsedMs}ms.", 
+            _logger.LogInformation("Successfully parsed Excel {FileName} in {ElapsedMs}ms.",
                 fileName, sw.ElapsedMilliseconds);
 
-            return new ParsedDocument
+            return Task.FromResult(new ParsedDocument
             {
                 Success = true,
                 Content = content,
                 FileName = fileName,
                 Type = DocumentType.Excel
-            };
+            });
         }
         catch (OperationCanceledException)
         {
@@ -88,12 +88,12 @@ public class ExcelDocumentParser : IDocumentParser
         {
             sw.Stop();
             _logger.LogError(ex, "Failed to parse Excel: {FileName}", fileName);
-            return new ParsedDocument
+            return Task.FromResult(new ParsedDocument
             {
                 Success = false,
                 ErrorMessage = ex.Message,
                 FileName = fileName
-            };
+            });
         }
     }
 }

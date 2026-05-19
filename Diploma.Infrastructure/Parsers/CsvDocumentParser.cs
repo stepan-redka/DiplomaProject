@@ -42,12 +42,12 @@ public class CsvDocumentParser : IDocumentParser
             };
 
             using var csv = new CsvReader(reader, config);
-            
+
             if (await csv.ReadAsync())
             {
                 csv.ReadHeader();
                 var headers = csv.HeaderRecord;
-                
+
                 if (headers != null)
                 {
                     textBuilder.AppendLine($"CSV File: {fileName}");
@@ -68,7 +68,7 @@ public class CsvDocumentParser : IDocumentParser
 
                     sw.Stop();
                     var content = textBuilder.ToString().Trim();
-                    _logger.LogInformation("Successfully parsed CSV {FileName} in {ElapsedMs}ms. Rows: {RowCount}", 
+                    _logger.LogInformation("Successfully parsed CSV {FileName} in {ElapsedMs}ms. Rows: {RowCount}",
                         fileName, sw.ElapsedMilliseconds, rowCount);
 
                     return new ParsedDocument

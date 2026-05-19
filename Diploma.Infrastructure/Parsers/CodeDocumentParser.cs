@@ -61,7 +61,7 @@ public class CodeDocumentParser : IDocumentParser
             var enrichedContent = $"File: {fileName}\nLanguage: {language}\n---\n{rawContent}";
 
             sw.Stop();
-            _logger.LogInformation("Successfully parsed {Language} file {FileName} in {ElapsedMs}ms.", 
+            _logger.LogInformation("Successfully parsed {Language} file {FileName} in {ElapsedMs}ms.",
                 language, fileName, sw.ElapsedMilliseconds);
 
             return new ParsedDocument
@@ -72,11 +72,16 @@ public class CodeDocumentParser : IDocumentParser
                 Type = DocumentType.SourceCode
             };
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Code parsing canceled for {FileName}", fileName);
+            throw;
+        }
         catch (Exception ex)
         {
             sw.Stop();
             _logger.LogError(ex, "Failed to parse code document: {FileName}", fileName);
-            
+
             return new ParsedDocument
             {
                 Success = false,

@@ -26,26 +26,26 @@ public static class ModelTrainer
 
             // 1. Load Data
             var rawData = DatasetManager.LoadAndMapClincData(sourceJsonPath);
-            
+
             // 2. Class Balancing (Down-sampling RESEARCH to handle majority bias)
             // RESEARCH samples (~15,000) vastly outnumber GENERAL (~400-500)
             var generalData = rawData.Where(d => d.Label == "GENERAL").ToList();
             var researchData = rawData.Where(d => d.Label == "RESEARCH").ToList();
-            
+
             Console.WriteLine($"[ML.NET] Raw distribution: GENERAL={generalData.Count}, RESEARCH={researchData.Count}");
-            
+
             // We take all GENERAL and a proportional amount of RESEARCH (1.5x)
             var random = new Random(42);
             var balancedResearchData = researchData
                 .OrderBy(x => random.Next())
                 .Take((int)(generalData.Count * 1.5))
                 .ToList();
-            
+
             var balancedData = generalData
                 .Concat(balancedResearchData)
                 .OrderBy(x => random.Next())
                 .ToList();
-            
+
             Console.WriteLine($"[ML.NET] Balanced distribution: GENERAL={generalData.Count}, RESEARCH={balancedResearchData.Count}");
 
             IDataView fullDataView = mlContext.Data.LoadFromEnumerable(balancedData);
@@ -56,16 +56,16 @@ public static class ModelTrainer
 
             // 4. Build Pipeline
             var pipeline = mlContext.Transforms.Text.FeaturizeText(
-                    outputColumnName: "Features", 
+                    outputColumnName: "Features",
                     inputColumnName: nameof(IntentData.Text))
                 .Append(mlContext.Transforms.Conversion.MapValueToKey(
-                    outputColumnName: "Label", 
+                    outputColumnName: "Label",
                     inputColumnName: nameof(IntentData.Label)))
                 .Append(mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy(
-                    labelColumnName: "Label", 
+                    labelColumnName: "Label",
                     featureColumnName: "Features"))
                 .Append(mlContext.Transforms.Conversion.MapKeyToValue(
-                    outputColumnName: "PredictedLabel", 
+                    outputColumnName: "PredictedLabel",
                     inputColumnName: "PredictedLabel"));
 
             // 5. Train (Fit) on TrainSet

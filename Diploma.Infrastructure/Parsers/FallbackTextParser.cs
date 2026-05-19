@@ -36,7 +36,7 @@ public class FallbackTextParser : IDocumentParser
             var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
-            _logger.LogInformation("Successfully parsed file {FileName} using fallback in {ElapsedMs}ms. Length: {Length}", 
+            _logger.LogInformation("Successfully parsed file {FileName} using fallback in {ElapsedMs}ms. Length: {Length}",
                 fileName, sw.ElapsedMilliseconds, content.Length);
 
             return new ParsedDocument
@@ -56,7 +56,7 @@ public class FallbackTextParser : IDocumentParser
         {
             sw.Stop();
             _logger.LogError(ex, "Fallback parser failed for file: {FileName} after {ElapsedMs}ms", fileName, sw.ElapsedMilliseconds);
-            
+
             return new ParsedDocument
             {
                 Success = false,

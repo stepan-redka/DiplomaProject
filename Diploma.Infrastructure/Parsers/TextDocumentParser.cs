@@ -33,7 +33,7 @@ public class TextDocumentParser : IDocumentParser
             var content = await reader.ReadToEndAsync(ct);
 
             sw.Stop();
-            _logger.LogInformation("Successfully parsed text document {FileName} in {ElapsedMs}ms. Length: {Length}", 
+            _logger.LogInformation("Successfully parsed text document {FileName} in {ElapsedMs}ms. Length: {Length}",
                 fileName, sw.ElapsedMilliseconds, content.Length);
 
             return new ParsedDocument
@@ -53,7 +53,7 @@ public class TextDocumentParser : IDocumentParser
         {
             sw.Stop();
             _logger.LogError(ex, "Failed to parse text document: {FileName} after {ElapsedMs}ms", fileName, sw.ElapsedMilliseconds);
-            
+
             return new ParsedDocument
             {
                 Success = false,
