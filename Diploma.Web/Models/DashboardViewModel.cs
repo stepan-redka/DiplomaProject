@@ -14,7 +14,7 @@ public class DashboardViewModel
     public string StorageUsedFormatted { get; set; } = "0 B";
     public double StorageLimitMB { get; set; } = 1024; // 1GB default limit for thesis context
     public bool IsAuthenticated { get; set; }
-    
+
     // Session Management
     public Guid? ActiveSessionId { get; set; }
     public List<ChatSessionDto> RecentSessions { get; set; } = new();

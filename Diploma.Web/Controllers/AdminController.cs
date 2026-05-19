@@ -20,7 +20,7 @@ public class AdminController : Controller
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
-        ApplicationDbContext dbContext, 
+        ApplicationDbContext dbContext,
         IHealthService healthService,
         IRagService ragService,
         UserManager<IdentityUser> userManager,
@@ -38,20 +38,20 @@ public class AdminController : Controller
         _logger.LogInformation("Proactive admin dashboard accessed.");
 
         var health = await _healthService.GetSystemHealthAsync();
-        
+
         var stats = new AdminStatsDto
         {
             Health = health,
             TotalUsers = await _dbContext.Users.CountAsync(),
             TotalDocuments = await _dbContext.Documents.IgnoreQueryFilters().CountAsync(),
             TotalChunks = await _dbContext.DocumentChunks.IgnoreQueryFilters().CountAsync(),
-            
+
             // User stats with Lockout status
             UserManagement = await _dbContext.Users
-                .Select(u => new UserManagementDto 
-                { 
-                    UserId = u.Id, 
-                    Email = u.Email ?? "Unknown", 
+                .Select(u => new UserManagementDto
+                {
+                    UserId = u.Id,
+                    Email = u.Email ?? "Unknown",
                     IsLockedOut = u.LockoutEnd > DateTimeOffset.UtcNow,
                     DocumentCount = _dbContext.Documents.IgnoreQueryFilters().Count(d => d.UserId == u.Id)
                 }).ToListAsync(),
@@ -98,23 +98,30 @@ public class AdminController : Controller
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> WipeUserVectors(string userId)
     {
-        _logger.LogWarning("Admin initiated emergency vector wipe for user: {UserId}", userId);
-        
-        // This is a powerful action, bypass filters to find all docs for this specific user
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest("UserId is required.");
+        }
+
+        _logger.LogWarning("Admin {AdminId} initiated emergency vector wipe for user: {TargetUserId}",
+            User.Identity?.Name, userId);
+
+        // SECURITY FIX: Bypassing scoped IRagService to ensure we target the specific user
         var userDocs = await _dbContext.Documents
             .IgnoreQueryFilters()
             .Where(d => d.UserId == userId)
             .ToListAsync();
 
-        foreach (var doc in userDocs)
+        if (userDocs.Count > 0)
         {
-            // Delete from vector DB and SQL
-            await _ragService.ClearCollectionAsync(); // Simplification: in production, use a more targeted user-scoped delete if available
+            _dbContext.Documents.RemoveRange(userDocs);
+            await _dbContext.SaveChangesAsync();
+            _logger.LogInformation("SQL wipe complete for user: {TargetUserId}. Removed {Count} documents.", userId, userDocs.Count);
         }
 
-        _logger.LogInformation("Wipe complete for user: {UserId}", userId);
         return RedirectToAction(nameof(Index));
     }
 }

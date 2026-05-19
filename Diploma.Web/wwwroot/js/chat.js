@@ -8,6 +8,7 @@ class RagApp {
         this.chatWindow = document.getElementById('chatWindow');
         this.chatInput = document.getElementById('chatInput');
         this.sendBtn = document.getElementById('sendBtn');
+        this.cancelBtn = document.getElementById('cancelBtn');
         this.fileInput = document.getElementById('fileInput');
         this.clearBtn = document.getElementById('clearBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
@@ -27,17 +28,27 @@ class RagApp {
         this.pasteModal = document.getElementById('pasteModal');
         this.upsellModal = document.getElementById('upsellModal');
         
+        // Cancellation state
+        this.abortController = null;
+        
         this.initEventListeners();
         this.loadChatHistory();
         
         this.messageCount = 0;
     }
-
     initEventListeners() {
-        this.sendBtn.addEventListener('click', () => this.handleAsk());
-        this.chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.handleAsk();
-        });
+        if (this.sendBtn) {
+            this.sendBtn.addEventListener('click', () => this.handleAsk());
+        }
+        if (this.chatInput) {
+            this.chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.handleAsk();
+            });
+        }
+
+        if (this.cancelBtn) {
+            this.cancelBtn.addEventListener('click', () => this.handleCancel());
+        }
 
         if (this.fileInput) {
             this.fileInput.addEventListener('change', () => this.handleUpload());
@@ -96,6 +107,7 @@ class RagApp {
             }
         } catch (error) {
             console.error('Failed to load chat history:', error);
+            window.showAlert('History Unavailable', 'Could not load chat history. Starting fresh session.', 'error');
             this.renderLobby();
         }
     }
@@ -128,6 +140,12 @@ class RagApp {
         }
     }
 
+    handleCancel() {
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+    }
+
     async handleAsk() {
         const question = this.chatInput.value.trim();
         if (!question) return;
@@ -143,6 +161,9 @@ class RagApp {
 
         this.appendMessage('user', question);
         this.chatInput.value = '';
+
+        // Create a fresh AbortController for this request
+        this.abortController = new AbortController();
         this.showLoading(true);
 
         try {
@@ -154,8 +175,15 @@ class RagApp {
                     sessionId: this.currentSessionId,
                     topK: topK,
                     intent: intent
-                })
+                }),
+                signal: this.abortController.signal
             });
+
+            // 499 = server confirmed the client-initiated cancellation
+            if (response.status === 499) {
+                this.appendCancelMessage();
+                return;
+            }
 
             if (!response.ok) throw new Error('Failed to communicate with AI service.');
 
@@ -183,10 +211,30 @@ class RagApp {
             }
 
         } catch (error) {
-            this.appendMessage('ai', 'Error: ' + error.message);
+            if (error.name === 'AbortError') {
+                // User clicked Cancel — show a soft informational note, not a red error
+                this.appendCancelMessage();
+            } else {
+                this.appendMessage('ai', 'Error: ' + error.message);
+            }
         } finally {
+            this.abortController = null;
             this.showLoading(false);
         }
+    }
+
+    appendCancelMessage() {
+        const container = document.createElement('div');
+        container.className = 'max-w-2xl mx-auto pl-14 fade-in';
+        container.innerHTML = `
+            <p class="text-[11px] text-zinc-600 italic flex items-center gap-1.5">
+                <i data-lucide="circle-slash" class="w-3 h-3"></i>
+                Query canceled.
+            </p>
+        `;
+        this.chatWindow.appendChild(container);
+        if (window.lucide) lucide.createIcons({ root: container });
+        this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
     }
 
     async handleFeedback(messageId, effectiveness) {
@@ -216,6 +264,7 @@ class RagApp {
             }
         } catch (error) {
             console.error('Failed to save feedback:', error);
+            window.showAlert('Feedback Failed', 'Could not save your feedback. Please try again.', 'error');
         }
     }
 
@@ -427,6 +476,10 @@ class RagApp {
     showLoading(show) {
         this.loadingIndicator.classList.toggle('hidden', !show);
         this.sendBtn.disabled = show;
+        this.sendBtn.classList.toggle('hidden', show);
+        if (this.cancelBtn) {
+            this.cancelBtn.classList.toggle('hidden', !show);
+        }
     }
 }
 

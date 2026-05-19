@@ -20,7 +20,7 @@ public class DocumentsController : Controller
     private readonly ILogger<DocumentsController> _logger;
 
     public DocumentsController(
-        IRagService ragService, 
+        IRagService ragService,
         ICurrentUserService currentUserService,
         IngestionChannel ingestionChannel,
         RecyclableMemoryStreamManager streamManager,
@@ -60,12 +60,12 @@ public class DocumentsController : Controller
             {
                 // PERFORMANCE: Use RecyclableMemoryStream to avoid LOH fragmentation
                 using var pooledStream = _streamManager.GetStream();
-                await file.CopyToAsync(pooledStream);
+                await file.CopyToAsync(pooledStream, HttpContext.RequestAborted);
                 var fileData = pooledStream.ToArray();
 
                 var task = new IngestionTask(fileData, file.FileName, userId);
-                await _ingestionChannel.Writer.WriteAsync(task);
-                
+                await _ingestionChannel.Writer.WriteAsync(task, HttpContext.RequestAborted);
+
                 _logger.LogInformation("File {FileName} queued for background ingestion.", file.FileName);
                 queuedCount++;
             }
@@ -91,8 +91,8 @@ public class DocumentsController : Controller
         var userId = _currentUserService.UserId;
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        var docName = string.IsNullOrWhiteSpace(request.DocumentName) 
-            ? $"Manual_Entry_{DateTime.Now:yyyyMMdd_HHmm}.txt" 
+        var docName = string.IsNullOrWhiteSpace(request.DocumentName)
+            ? $"Manual_Entry_{DateTime.Now:yyyyMMdd_HHmm}.txt"
             : request.DocumentName;
 
         try

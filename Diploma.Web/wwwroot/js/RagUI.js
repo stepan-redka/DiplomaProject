@@ -8,11 +8,12 @@ import { RagClient } from './RagClient.js';
 class RagUI {
     constructor() {
         this.client = new RagClient();
-        
+
         // DOM Elements
         this.chatWindow = document.getElementById('chatWindow');
         this.chatInput = document.getElementById('chatInput');
         this.sendBtn = document.getElementById('sendBtn');
+        this.cancelBtn = document.getElementById('cancelBtn');
         this.exportBtn = document.getElementById('exportBtn');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         this.sourceInspector = document.getElementById('sourceInspector');
@@ -20,15 +21,24 @@ class RagUI {
         this.toggleInspectorBtn = document.getElementById('toggleInspector');
         this.closeInspectorBtn = document.getElementById('closeInspector');
         this.sessionList = document.getElementById('sessionList');
-        
+
         this.sidebar = document.getElementById('mainSidebar');
         this.toggleSidebarBtn = document.getElementById('toggleSidebar');
-        
+
         this.topKRange = document.getElementById('topKRange');
         this.topKValue = document.getElementById('topKValue');
         this.researchModeToggle = document.getElementById('researchModeToggle');
         this.modelSelector = document.getElementById('modelSelector');
-        
+
+        // New Session Modal Elements
+        this.newSessionModal = document.getElementById('new-session-modal');
+        this.newSessionForm = document.getElementById('new-session-form');
+        this.newThreadBtn = document.getElementById('new-thread-btn');
+        this.closeNewSessionModal = document.getElementById('close-new-session-modal');
+        this.cancelNewSessionBtn = document.getElementById('cancel-new-session');
+        this.newSessionModalOverlay = document.getElementById('new-session-modal-overlay');
+
+
         this.mainWorkspace = document.getElementById('mainWorkspace');
         const sid = this.mainWorkspace ? this.mainWorkspace.getAttribute('data-session-id') : null;
         this.currentSessionId = sid && sid !== "" && sid !== "00000000-0000-0000-0000-000000000000" ? sid : null;
@@ -36,6 +46,7 @@ class RagUI {
         // View State
         this.activeView = 'chat'; // 'chat', 'benchmarks', 'health'
         this.charts = [];
+        this.activeRequestController = null;
 
         // Sidebar Persistence: Check before initializing icons
         if (localStorage.getItem('sidebarCollapsed') === 'true') {
@@ -48,7 +59,7 @@ class RagUI {
                 breaks: true,
                 gfm: true
             };
-            
+
             if (typeof marked.use === 'function') {
                 marked.use(markedConfig);
             } else if (typeof marked.setOptions === 'function') {
@@ -59,7 +70,7 @@ class RagUI {
         this.initEventListeners();
         this.loadChatHistory();
         this.updateExportLink();
-        
+
         this.sourceCache = {};
 
         // Force initialize icons for static header elements
@@ -67,14 +78,21 @@ class RagUI {
     }
 
     initEventListeners() {
-        this.sendBtn.onclick = () => this.handleAsk();
-        this.chatInput.onkeydown = (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.handleAsk();
-            }
-            this.autoResizeTextArea();
-        };
+        if (this.sendBtn) {
+            this.sendBtn.onclick = () => this.handleAsk();
+        }
+        if (this.cancelBtn) {
+            this.cancelBtn.onclick = () => this.cancelActiveRequest();
+        }
+        if (this.chatInput) {
+            this.chatInput.onkeydown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.handleAsk();
+                }
+                this.autoResizeTextArea();
+            };
+        }
 
         if (this.topKRange) {
             this.topKRange.oninput = (e) => {
@@ -93,11 +111,47 @@ class RagUI {
             this.toggleSidebarBtn.onclick = () => this.toggleSidebar();
         }
 
+        // New Session Modal Listeners
+        if (this.newThreadBtn) {
+            this.newThreadBtn.onclick = () => this.toggleNewSessionModal(true);
+        }
+        if (this.closeNewSessionModal) {
+            this.closeNewSessionModal.onclick = () => this.toggleNewSessionModal(false);
+        }
+        if (this.cancelNewSessionBtn) {
+            this.cancelNewSessionBtn.onclick = () => this.toggleNewSessionModal(false);
+        }
+        if (this.newSessionModalOverlay) {
+            this.newSessionModalOverlay.onclick = () => this.toggleNewSessionModal(false);
+        }
+        if (this.newSessionForm) {
+            this.newSessionForm.onsubmit = (e) => this.handleCreateSession(e);
+        }
+
+        const documentList = document.getElementById('documentList');
+        if (documentList) {
+            documentList.addEventListener('click', (e) => {
+                // If we clicked the trash button, don't trigger binding
+                if (e.target.closest('button')) return;
+
+                const docItem = e.target.closest('.document-item');
+                if (docItem) {
+                    const docId = docItem.getAttribute('data-doc-id');
+                    if (docId) {
+                        this.handleToggleDocumentBinding(docId, docItem);
+                    }
+                }
+            });
+        }
+
         // Keyboard Shortcut: Ctrl+B to toggle sidebar
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'b') {
                 e.preventDefault();
                 this.toggleSidebar();
+            }
+             if (e.key === 'Escape') {
+                this.toggleNewSessionModal(false);
             }
         });
 
@@ -138,7 +192,7 @@ class RagUI {
                 if (view) this.switchView(view);
             }
         });
-        
+
         // RE-ATTACH SIDEBAR BUTTONS GLOBALLY
         window.handleDeleteSession = (sid, el, e) => {
             if (e) e.stopPropagation();
@@ -152,9 +206,107 @@ class RagUI {
         this.initSidebarLinks();
     }
 
-    handleExport() {
-        if (!this.currentSessionId) return;
-        window.location.href = `/Chat/ExportSession?sessionId=${this.currentSessionId}`;
+    toggleNewSessionModal(show) {
+        if (!this.newSessionModal) return;
+        this.newSessionModal.classList.toggle('hidden', !show);
+        if (show) {
+            document.getElementById('session-title').focus();
+        }
+    }
+
+    async handleCreateSession(event) {
+        event.preventDefault();
+        const form = event.target;
+        const title = form.elements['title'].value.trim() || 'New Research Thread';
+        const selectedDocumentIds = Array.from(form.querySelectorAll('input[name="selectedDocumentIds"]:checked'))
+            .map(checkbox => checkbox.value);
+
+        this.toggleNewSessionModal(false);
+        this.showLoading(true);
+
+        try {
+            const response = await this.client.createSession(title, selectedDocumentIds);
+            if (response && response.sessionId) {
+                window.location.href = `/?sessionId=${response.sessionId}`;
+            } else {
+                window.showAlert('Session Error', 'Failed to create session. The server returned an invalid response.', 'error');
+                this.showLoading(false);
+            }
+        } catch (error) {
+            window.showAlert('Network Error', 'Failed to communicate with the server while creating the session.', 'error');
+            this.showLoading(false);
+        }
+    }
+
+    async handleToggleDocumentBinding(documentId, element) {
+        if (!this.currentSessionId) {
+            window.showAlert('Action Required', 'Please select or create a chat session first to bind this document.', 'info');
+            return;
+        }
+
+        element.style.opacity = '0.5';
+        try {
+            const response = await this.client.toggleDocumentBinding(this.currentSessionId, documentId);
+            element.classList.toggle('active-binding', response.bound);
+        } catch (error) {
+            window.showAlert('Binding Failed', 'Could not toggle document binding due to a network error.', 'error');
+        } finally {
+            element.style.opacity = '1';
+        }
+    }
+
+    updateDocumentBindingsUI(boundDocumentIds = []) {
+        const docItems = document.querySelectorAll('.document-item');
+        docItems.forEach(item => {
+            const docId = item.getAttribute('data-doc-id');
+            const isBound = boundDocumentIds.includes(docId);
+            item.classList.toggle('active-binding', isBound);
+        });
+    }
+
+    async handleExport() {
+        if (!this.currentSessionId) {
+            window.showAlert('Export Findings', 'Active session required for export.', 'info');
+            return;
+        }
+
+        if (!this.exportBtn) return;
+
+        const originalHtml = this.exportBtn.innerHTML;
+        this.exportBtn.disabled = true;
+        this.exportBtn.classList.add('opacity-60', 'pointer-events-none');
+        this.exportBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Exporting</span>';
+        if (window.lucide) lucide.createIcons({ root: this.exportBtn });
+
+        try {
+            const response = await fetch(`/Chat/ExportSession?sessionId=${this.currentSessionId}`);
+            if (!response.ok) {
+                const message = await response.text();
+                window.showAlert('Export Findings', message || 'Unable to export this research thread.', 'info');
+                return;
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('content-disposition') || '';
+            const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+            const fileName = fileNameMatch ? decodeURIComponent(fileNameMatch[1].replace(/"/g, '')) : 'Research_Findings.pdf';
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            window.showAlert('Export Findings', 'Unable to generate the research export. Please try again.', 'error');
+        } finally {
+            this.exportBtn.disabled = false;
+            this.exportBtn.classList.remove('opacity-60', 'pointer-events-none');
+            this.exportBtn.innerHTML = originalHtml;
+            if (window.lucide) lucide.createIcons({ root: this.exportBtn });
+            this.updateExportLink();
+        }
     }
 
     initSidebarLinks() {
@@ -196,12 +348,9 @@ class RagUI {
     async switchView(viewName) {
         const isChat = viewName.toLowerCase() === 'chat';
         this.activeView = viewName.toLowerCase();
-        
+
         // Toggle Chat Input visibility
-        const inputContainer = this.chatInput?.closest('.p-8.border-t');
-        if (inputContainer) {
-            inputContainer.classList.toggle('hidden', !isChat);
-        }
+        this.showChatInput(isChat);
 
         // Deactivate all interactive links
         document.querySelectorAll('aside nav a, header .lab-link').forEach(a => {
@@ -220,7 +369,7 @@ class RagUI {
         try {
             const html = await this.client.getLabView(viewName);
             this.chatWindow.innerHTML = `<div class="py-12 animate-in fade-in duration-500">${html}</div>`;
-            
+
             // Mark the link as active
             document.querySelectorAll('.lab-link').forEach(a => {
                 const view = a.getAttribute('data-view');
@@ -232,19 +381,19 @@ class RagUI {
                     }
                 }
             });
-            
+
             // Re-initialize Lucide icons for the new content
             if (window.lucide) {
                 lucide.createIcons({ root: this.chatWindow });
             }
 
             // --- RESTORE SCIENTIFIC PLOTS ---
-            if (viewName === 'benchmarks') {
+            if (viewName.toLowerCase() === 'benchmarks') {
                 this.initBenchmarksCharts();
             }
 
         } catch (error) {
-            console.error(error);
+            window.showAlert('Navigation Failed', `Could not load ${viewName} view: ${error.message}`, 'error');
             this.chatWindow.innerHTML = `<div class="p-12 text-center text-red-500 font-mono text-xs">ERR_VIEW_LOAD_FAILED: ${error.message}</div>`;
         } finally {
             this.showLoading(false);
@@ -252,16 +401,129 @@ class RagUI {
     }
 
     initBenchmarksCharts() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.initBenchmarksCharts(), { once: true });
+            return;
+        }
+
         const container = document.getElementById('benchmarksData');
         if (!container) return;
 
+        const chartGrid = document.getElementById('benchmarksChartGrid');
+        const emptyState = document.getElementById('benchmarksEmptyState');
+        const fallbackText = 'No empirical telemetry recorded yet. Process queries or ingest documents to populate scientific graphs.';
+
+        const showEmptyState = (show) => {
+            if (chartGrid) chartGrid.classList.toggle('hidden', show);
+            if (emptyState) emptyState.classList.toggle('hidden', !show);
+            if (show && emptyState && window.lucide) lucide.createIcons({ root: emptyState });
+        };
+
+        const readJsonArray = (attributeName) => {
+            try {
+                const raw = container.getAttribute(attributeName);
+                const value = raw ? JSON.parse(raw) : [];
+                return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
+            } catch (error) {
+                console.warn(`Invalid benchmarks payload in ${attributeName}`, error);
+                return [];
+            }
+        };
+
+        const valueOf = (row, ...keys) => {
+            for (const key of keys) {
+                if (row && row[key] !== undefined && row[key] !== null) return row[key];
+            }
+            return null;
+        };
+
+        const toNumber = (value) => {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : 0;
+        };
+
+        const hasPositiveMetric = (items, ...keys) => {
+            return items.some(item => keys.some(key => toNumber(valueOf(item, key)) > 0));
+        };
+
+        const setChartFallback = (canvas, show) => {
+            const wrapper = canvas?.parentElement;
+            if (!wrapper) return;
+
+            wrapper.classList.add('relative');
+            canvas.classList.toggle('hidden', show);
+
+            let placeholder = wrapper.querySelector('[data-chart-fallback]');
+            if (show) {
+                if (!placeholder) {
+                    placeholder = document.createElement('div');
+                    placeholder.setAttribute('data-chart-fallback', 'true');
+                    placeholder.className = 'absolute inset-0 flex items-center justify-center px-4 text-center text-xs font-semibold leading-relaxed text-zinc-500 dark:text-zinc-400';
+                    placeholder.textContent = fallbackText;
+                    wrapper.appendChild(placeholder);
+                }
+            } else if (placeholder) {
+                placeholder.remove();
+            }
+        };
+
+        const datasetHasValues = (data) => {
+            if (!data || !Array.isArray(data.datasets) || data.datasets.length === 0) return false;
+
+            return data.datasets.some(dataset => {
+                if (!dataset || !Array.isArray(dataset.data) || dataset.data.length === 0) return false;
+
+                return dataset.data.some(point => {
+                    if (typeof point === 'number') return Number.isFinite(point) && point > 0;
+                    if (!point || typeof point !== 'object') return false;
+
+                    return ['x', 'y'].some(key => Number.isFinite(Number(point[key])) && Number(point[key]) > 0);
+                });
+            });
+        };
+
         try {
-            const latencyData = JSON.parse(container.getAttribute('data-latency'));
-            const ingestionData = JSON.parse(container.getAttribute('data-ingestion'));
-            const precisionData = JSON.parse(container.getAttribute('data-precision'));
-            const throughputData = JSON.parse(container.getAttribute('data-throughput'));
-            const correlationData = JSON.parse(container.getAttribute('data-correlation'));
-            const densityData = JSON.parse(container.getAttribute('data-density'));
+            const latencyData = readJsonArray('data-latency');
+            const ingestionData = readJsonArray('data-ingestion');
+            const retrievalData = readJsonArray('data-retrieval');
+            const throughputData = readJsonArray('data-throughput');
+            const densityData = readJsonArray('data-density');
+            const storageData = readJsonArray('data-storage');
+            const chartPayload = {
+                latencyData,
+                ingestionData,
+                retrievalData,
+                throughputData,
+                densityData,
+                storageData
+            };
+
+            console.log('Chart Payload:', chartPayload);
+
+            const hasTelemetry =
+                hasPositiveMetric(latencyData, 'value', 'Value') ||
+                hasPositiveMetric(ingestionData, 'value', 'Value') ||
+                hasPositiveMetric(retrievalData, 'value', 'Value') ||
+                hasPositiveMetric(throughputData, 'value', 'Value') ||
+                hasPositiveMetric(densityData, 'value', 'Value') ||
+                hasPositiveMetric(storageData, 'value', 'Value');
+
+            // Dispose old charts before deciding whether to render this view.
+            this.charts.forEach(c => c.destroy());
+            this.charts = [];
+
+            if (!window.Chart) {
+                console.warn('Chart.js is not available; benchmarks charts cannot be rendered.');
+                showEmptyState(true);
+                return;
+            }
+
+            if (!hasTelemetry) {
+                showEmptyState(true);
+                return;
+            }
+
+            showEmptyState(false);
 
             const chartOptions = {
                 responsive: true,
@@ -273,103 +535,102 @@ class RagUI {
                 }
             };
 
-            // Dispose old charts if they exist
-            this.charts.forEach(c => c.destroy());
-            this.charts = [];
+            const createChart = (canvasId, config) => {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) {
+                    console.warn(`Benchmarks canvas #${canvasId} was not found.`);
+                    return null;
+                }
+
+                if (!datasetHasValues(config?.data)) {
+                    setChartFallback(canvas, true);
+                    return null;
+                }
+
+                setChartFallback(canvas, false);
+                const chart = new Chart(canvas, config);
+                this.charts.push(chart);
+                chart.update();
+                return chart;
+            };
 
             // Chart A: Latency
-            const cLatency = new Chart(document.getElementById('chartLatency'), {
+            createChart('chartLatency', {
                 type: 'bar',
                 data: {
-                    labels: latencyData.map(d => d.modelName),
+                    labels: latencyData.map(d => valueOf(d, 'label', 'Label') || 'Unknown'),
                     datasets: [{
-                        data: latencyData.map(d => d.averageLatencyMs),
+                        data: latencyData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
                         backgroundColor: '#6366f1',
                         borderRadius: 8
                     }]
                 },
                 options: chartOptions
             });
-            this.charts.push(cLatency);
 
             // Chart B: Ingestion
-            const cIngestion = new Chart(document.getElementById('chartIngestion'), {
-                type: 'scatter',
+            createChart('chartIngestion', {
+                type: 'bar',
                 data: {
+                    labels: ingestionData.map(d => valueOf(d, 'label', 'Label') || 'Document'),
                     datasets: [{
-                        label: 'Efficiency',
-                        data: ingestionData.map(d => ({ x: d.fileSizeBytes / 1024, y: d.processingTimeMs })),
-                        backgroundColor: '#8b5cf6'
+                        data: ingestionData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 8
                     }]
                 },
                 options: {
                     ...chartOptions,
                     scales: {
-                        x: { title: { display: true, text: 'Size (KB)', font: { size: 8 } } },
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
                         y: { title: { display: true, text: 'Time (ms)', font: { size: 8 } } }
                     }
                 }
             });
-            this.charts.push(cIngestion);
 
-            // Chart C: Precision
-            const cPrecision = new Chart(document.getElementById('chartPrecision'), {
+            // Chart C: Retrieval Similarity
+            createChart('chartRetrieval', {
                 type: 'line',
                 data: {
-                    labels: precisionData.map((_, i) => i + 1),
+                    labels: retrievalData.map(d => valueOf(d, 'label', 'Label') || ''),
                     datasets: [{
-                        data: precisionData.map(d => d.maxScore),
+                        data: retrievalData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
                         borderColor: '#10b981',
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         fill: true,
                         tension: 0.4
                     }]
                 },
-                options: chartOptions
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                        y: { min: 0, max: 1, title: { display: true, text: 'Similarity', font: { size: 8 } } }
+                    }
+                }
             });
-            this.charts.push(cPrecision);
 
             // Chart D: Throughput
-            const cThroughput = new Chart(document.getElementById('chartThroughput'), {
+            createChart('chartThroughput', {
                 type: 'bar',
                 data: {
-                    labels: throughputData.map(d => d.modelName),
+                    labels: throughputData.map(d => valueOf(d, 'label', 'Label') || 'Unknown'),
                     datasets: [{
-                        data: throughputData.map(d => d.tokensPerSec),
+                        data: throughputData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
                         backgroundColor: '#f59e0b',
                         borderRadius: 8
                     }]
                 },
                 options: chartOptions
             });
-            this.charts.push(cThroughput);
 
-            // Chart E: Correlation
-            const cCorrelation = new Chart(document.getElementById('chartCorrelation'), {
-                type: 'bubble',
-                data: {
-                    datasets: [{
-                        data: correlationData.map(d => ({ x: d.similarityScore, y: d.userEffectiveness, r: 6 })),
-                        backgroundColor: 'rgba(99, 102, 241, 0.5)'
-                    }]
-                },
-                options: {
-                    ...chartOptions,
-                    scales: {
-                        x: { min: 0.5, max: 1.0, title: { display: true, text: 'Confidence', font: { size: 8 } } },
-                        y: { min: 0, max: 2, ticks: { stepSize: 1 }, title: { display: true, text: 'Feedback', font: { size: 8 } } }
-                    }
-                }
-            });
-            this.charts.push(cCorrelation);
-
-            // Chart F: Density
-            const cDensity = new Chart(document.getElementById('chartDensity'), {
+            // Chart E: Knowledge Density
+            createChart('chartDensity', {
                 type: 'doughnut',
                 data: {
-                    labels: densityData.map(d => d.documentName),
+                    labels: densityData.map(d => valueOf(d, 'label', 'Label') || 'Untitled Document'),
                     datasets: [{
-                        data: densityData.map(d => d.chunkCount),
+                        data: densityData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
                         backgroundColor: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'],
                         borderWidth: 0
                     }]
@@ -380,20 +641,49 @@ class RagUI {
                     plugins: { legend: { display: false } }
                 }
             });
-            this.charts.push(cDensity);
+
+            // Chart F: Storage / Vector Footprint
+            createChart('chartStorage', {
+                type: 'bar',
+                data: {
+                    labels: storageData.map(d => valueOf(d, 'label', 'Label') || 'Untitled Document'),
+                    datasets: [{
+                        data: storageData.map(d => toNumber(valueOf(d, 'value', 'Value'))),
+                        backgroundColor: '#ec4899',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                        y: { title: { display: true, text: 'KB', font: { size: 8 } } }
+                    }
+                }
+            });
 
         } catch (e) {
-            console.error("Chart initialization failed:", e);
+            if (window.showAlert) {
+                window.showAlert('Visualization Error', 'Failed to initialize benchmark charts.', 'error');
+            } else {
+                console.error('Failed to initialize benchmark charts.', e);
+            }
+            showEmptyState(true);
         }
     }
 
     async switchSession(sessionId) {
+        const wasChatView = this.activeView === 'chat';
         this.activeView = 'chat';
-        if (this.currentSessionId === sessionId) return;
-        
+        this.showChatInput(true);
+        this.charts.forEach(c => c.destroy());
+        this.charts = [];
+
+        if (this.currentSessionId === sessionId && wasChatView) return;
+
         this.currentSessionId = sessionId;
         window.history.pushState({}, '', `/?sessionId=${sessionId}`);
-        
+
         // Update UI Active State
         document.querySelectorAll('a[href*="sessionId="]').forEach(l => {
             l.classList.remove('bg-white', 'dark:bg-zinc-900/80', 'border-zinc-200', 'dark:border-zinc-800', 'shadow-sm', 'ring-1', 'ring-black/5', 'dark:ring-white/5');
@@ -421,6 +711,7 @@ class RagUI {
     }
 
     async loadChatHistory() {
+        this.updateDocumentBindingsUI(); // Clear all bindings first
         if (!this.currentSessionId) {
             this.renderLobby();
             return;
@@ -433,6 +724,9 @@ class RagUI {
             const data = await this.client.getHistory(this.currentSessionId);
             const messages = data.messages || data.Messages || [];
             const selectedModel = data.selectedModel || data.SelectedModel;
+            const relatedDocIds = data.relatedDocumentIds || data.RelatedDocumentIds || [];
+
+            this.updateDocumentBindingsUI(relatedDocIds);
 
             if (selectedModel && this.modelSelector) {
                 this.modelSelector.value = selectedModel;
@@ -481,6 +775,7 @@ class RagUI {
         if (this.activeView !== 'chat') {
             this.chatWindow.innerHTML = '';
             this.activeView = 'chat';
+            this.showChatInput(true);
         }
 
         const question = this.chatInput.value.trim();
@@ -496,10 +791,14 @@ class RagUI {
         this.chatInput.value = '';
         this.chatInput.style.height = 'auto';
         this.showLoading(true);
+        this.appendTypingIndicator();
+        this.activeRequestController = new AbortController();
 
         try {
-            const data = await this.client.ask(question, this.currentSessionId, topK, null, selectedModel, isHighFidelity);
-            
+            const data = await this.client.ask(question, this.currentSessionId, topK, null, selectedModel, isHighFidelity, this.activeRequestController.signal);
+
+            this.removeTypingIndicator();
+
             if (!this.currentSessionId && data.sessionId) {
                 this.currentSessionId = data.sessionId;
                 window.history.pushState({}, '', `/?sessionId=${data.sessionId}`);
@@ -511,15 +810,53 @@ class RagUI {
 
             this.appendMessage('ai', data.answer, data.latencyMs, data.messageId, data.sources);
         } catch (error) {
-            this.appendMessage('ai', 'Synthesis Error: ' + error.message);
+            this.removeTypingIndicator();
+            if (error.name === 'AbortError') {
+                this.appendMessage('ai', 'Request canceled by user.');
+            } else {
+                this.appendMessage('ai', 'Synthesis Error: ' + error.message);
+            }
         } finally {
+            this.activeRequestController = null;
             this.showLoading(false);
         }
     }
 
+    cancelActiveRequest() {
+        if (this.activeRequestController) {
+            this.activeRequestController.abort();
+        }
+    }
+
+    appendTypingIndicator() {
+        const container = document.createElement('div');
+        container.id = 'typingIndicator';
+        container.className = 'max-w-4xl mx-auto flex gap-8 fade-in px-4 mb-8';
+
+        container.innerHTML = `
+            <div class="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center border bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
+                <i data-lucide="bot" class="w-5 h-5"></i>
+            </div>
+            <div class="flex-1 flex items-center gap-1.5 pt-4">
+                <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            </div>
+        `;
+
+        this.chatWindow.appendChild(container);
+        if (window.lucide) lucide.createIcons({ root: container });
+        this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
+    }
+
+    removeTypingIndicator() {
+        const el = document.getElementById('typingIndicator');
+        if (el) el.remove();
+    }
+
     updateExportLink() {
         if (!this.exportBtn) return;
-        
+
         if (this.currentSessionId) {
             this.exportBtn.href = `/Chat/ExportSession?sessionId=${this.currentSessionId}`;
             this.exportBtn.classList.remove('opacity-50', 'pointer-events-none');
@@ -565,13 +902,23 @@ class RagUI {
         if (sender === 'ai' && sources && sources.length > 0) {
             const sourceGrid = document.createElement('div');
             sourceGrid.className = 'flex flex-wrap gap-2 mt-6';
+            const fallbackId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            const proofListId = `proofs-${messageId || fallbackId}`;
+            this.sourceCache[proofListId] = sources;
+
+            const inspectAll = document.createElement('button');
+            inspectAll.className = 'px-3 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border border-zinc-900 dark:border-white text-[10px] font-bold hover:opacity-90 transition-all flex items-center gap-2 shadow-sm';
+            inspectAll.innerHTML = `<i data-lucide="list-checks" class="w-3 h-3"></i> Evidence (${sources.length})`;
+            inspectAll.onclick = () => this.inspectSources(proofListId);
+            sourceGrid.appendChild(inspectAll);
+
             sources.forEach((s, idx) => {
                 const sourceId = `src-${messageId}-${idx}`;
                 this.sourceCache[sourceId] = s;
                 const badge = document.createElement('button');
                 badge.className = 'px-3 py-1.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all flex items-center gap-2 shadow-sm';
-                badge.innerHTML = `<i data-lucide="file-text" class="w-3 h-3"></i> Source [${idx + 1}]`;
-                badge.onclick = () => this.inspectSource(sourceId);
+                badge.innerHTML = `<i data-lucide="file-text" class="w-3 h-3"></i> Proof [${idx + 1}]`;
+                badge.onclick = () => this.inspectSources(proofListId, idx);
                 sourceGrid.appendChild(badge);
             });
             content.appendChild(sourceGrid);
@@ -593,36 +940,86 @@ class RagUI {
         } catch (e) {}
     }
 
-    inspectSource(sourceId) {
-        const source = this.sourceCache[sourceId];
-        if (!source) return;
+    inspectSources(sourceListId, activeIndex = 0) {
+        const sources = this.sourceCache[sourceListId];
+        if (!Array.isArray(sources) || sources.length === 0) return;
         this.toggleInspector(true);
-        
-        const scorePercent = Math.round((source.score || source.Score || 0) * 100);
-        
-        this.inspectorContent.innerHTML = `
-            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                         <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Verified Source</span>
-                         <span class="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">${scorePercent}% Match</span>
-                    </div>
-                    <h4 class="text-sm font-bold text-zinc-900 dark:text-white leading-tight">${source.sourceDocument || source.SourceDocument}</h4>
-                </div>
-                
-                <div class="relative">
-                    <div class="absolute -left-4 top-0 bottom-0 w-0.5 bg-indigo-500/30"></div>
-                    <p class="text-[11px] text-zinc-600 dark:text-zinc-400 italic leading-relaxed">"${source.content || source.Content}"</p>
-                </div>
 
-                <div class="pt-4 border-t border-zinc-100 dark:border-zinc-900">
-                    <div class="flex items-center gap-2 text-[9px] text-zinc-400 dark:text-zinc-500 uppercase font-bold tracking-widest">
-                        <i data-lucide="shield-check" class="w-3 h-3"></i>
-                        <span>Actionable Provenance Bound</span>
-                    </div>
+        const normalized = sources.map((source, index) => ({
+            index,
+            content: source.content || source.Content || '',
+            sourceDocument: source.sourceDocument || source.SourceDocument || 'Unknown Source',
+            score: Number(source.score ?? source.Score ?? 0),
+            documentId: source.documentId || source.DocumentId || '',
+            chunkId: source.chunkId || source.ChunkId || '',
+            chunkIndex: source.chunkIndex ?? source.ChunkIndex
+        }));
+
+        const averageScore = normalized.reduce((sum, source) => sum + source.score, 0) / normalized.length;
+
+        this.inspectorContent.innerHTML = '';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'space-y-5 animate-in fade-in slide-in-from-right-4 duration-300';
+
+        const header = document.createElement('div');
+        header.className = 'space-y-2';
+        header.innerHTML = `
+            <div class="flex items-center justify-between gap-4">
+                <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Evidence Proof List</span>
+                <span class="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">${Math.round(averageScore * 100)}% Avg Match</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">Retrieved chunks used as grounded context for this answer. These are the proof records that constrain the model output.</p>
+        `;
+        wrapper.appendChild(header);
+
+        normalized.forEach((source) => {
+            const scorePercent = Math.round(source.score * 100);
+            const card = document.createElement('article');
+            card.className = `rounded-2xl border p-4 space-y-3 ${source.index === activeIndex ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-950/20' : 'border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/30'}`;
+
+            const title = document.createElement('div');
+            title.className = 'flex items-start justify-between gap-3';
+            title.innerHTML = `
+                <div class="min-w-0">
+                    <p class="text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Proof ${source.index + 1}</p>
+                    <h4 class="text-sm font-bold text-zinc-900 dark:text-white leading-tight truncate"></h4>
                 </div>
+                <span class="shrink-0 text-[10px] font-mono text-indigo-600 dark:text-indigo-400">${scorePercent}%</span>
+            `;
+            title.querySelector('h4').textContent = source.sourceDocument;
+            card.appendChild(title);
+
+            const meta = document.createElement('dl');
+            meta.className = 'grid grid-cols-1 gap-1 text-[10px] text-zinc-500 dark:text-zinc-500 font-mono';
+            const chunkLabel = Number.isInteger(Number(source.chunkIndex)) && Number(source.chunkIndex) >= 0 ? `#${source.chunkIndex}` : 'unknown';
+            meta.innerHTML = `
+                <div><dt class="inline uppercase tracking-widest">Chunk:</dt> <dd class="inline"></dd></div>
+                <div><dt class="inline uppercase tracking-widest">Chunk ID:</dt> <dd class="inline break-all"></dd></div>
+                <div><dt class="inline uppercase tracking-widest">Document ID:</dt> <dd class="inline break-all"></dd></div>
+            `;
+            meta.querySelectorAll('dd')[0].textContent = chunkLabel;
+            meta.querySelectorAll('dd')[1].textContent = source.chunkId || 'not recorded';
+            meta.querySelectorAll('dd')[2].textContent = source.documentId || 'not recorded';
+            card.appendChild(meta);
+
+            const quote = document.createElement('blockquote');
+            quote.className = 'relative border-l-2 border-indigo-500/40 pl-4 text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap';
+            quote.textContent = source.content;
+            card.appendChild(quote);
+
+            wrapper.appendChild(card);
+        });
+
+        const footer = document.createElement('div');
+        footer.className = 'pt-4 border-t border-zinc-100 dark:border-zinc-900';
+        footer.innerHTML = `
+            <div class="flex items-center gap-2 text-[9px] text-zinc-400 dark:text-zinc-500 uppercase font-bold tracking-widest">
+                <i data-lucide="shield-check" class="w-3 h-3"></i>
+                <span>Grounded retrieval evidence, not model-invented citations</span>
             </div>
         `;
+        wrapper.appendChild(footer);
+        this.inspectorContent.appendChild(wrapper);
         if (window.lucide) lucide.createIcons({ root: this.inspectorContent });
     }
 
@@ -633,9 +1030,9 @@ class RagUI {
 
     toggleSidebar(forceCollapse, instant = false) {
         if (!this.sidebar) return;
-        
+
         const isCollapsed = forceCollapse !== undefined ? forceCollapse : !this.sidebar.classList.contains('w-0');
-        
+
         if (instant) {
             this.sidebar.classList.add('transition-none');
         }
@@ -660,13 +1057,26 @@ class RagUI {
         if (instant) {
             // Force reflow
             this.sidebar.offsetHeight;
-            this.sidebar.classList.remove('transition-none');
+        this.sidebar.classList.remove('transition-none');
         }
     }
 
     showLoading(show) {
-        this.loadingIndicator.classList.toggle('hidden', !show);
-        this.sendBtn.disabled = show;
+        if (this.loadingIndicator) this.loadingIndicator.classList.toggle('hidden', !show);
+        if (this.sendBtn) {
+            this.sendBtn.disabled = show;
+            this.sendBtn.classList.toggle('hidden', show);
+        }
+        if (this.cancelBtn) {
+            this.cancelBtn.classList.toggle('hidden', !show);
+        }
+    }
+
+    showChatInput(show) {
+        const inputContainer = this.chatInput?.closest('.p-8.border-t');
+        if (inputContainer) {
+            inputContainer.classList.toggle('hidden', !show);
+        }
     }
 
     async handleUpload(input) {
@@ -686,7 +1096,7 @@ class RagUI {
 
     async handleDeleteSession(sessionId, element) {
         if (!await window.showConfirm('Delete Research Thread', 'Are you sure you want to delete this research thread? This action is irreversible.')) return;
-        
+
         try {
             const success = await this.client.deleteSession(sessionId);
             if (success) {
@@ -708,7 +1118,7 @@ class RagUI {
 
     async handleDeleteDocument(documentId, element) {
         if (!await window.showConfirm('Delete Document', 'Are you sure you want to delete this document from the knowledge registry?')) return;
-        
+
         try {
             const success = await this.client.deleteDocument(documentId);
             if (success) {

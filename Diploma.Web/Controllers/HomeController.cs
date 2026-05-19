@@ -17,8 +17,8 @@ public class HomeController : Controller
     private readonly ICurrentUserService _currentUserService;
 
     public HomeController(
-        ILogger<HomeController> logger, 
-        IRagService ragService, 
+        ILogger<HomeController> logger,
+        IRagService ragService,
         IChatHistoryService chatHistoryService,
         ICurrentUserService currentUserService)
     {
@@ -35,7 +35,7 @@ public class HomeController : Controller
         {
             var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
             var documents = await _ragService.GetUserDocumentsAsync();
-            
+
             var viewModel = new DashboardViewModel
             {
                 Documents = documents,
@@ -52,7 +52,7 @@ public class HomeController : Controller
                 var storageBytes = await _ragService.GetStorageUsedAsync();
                 viewModel.StorageUsedBytes = storageBytes;
                 viewModel.StorageUsedFormatted = StorageFormatter.FormatSize(storageBytes);
-                
+
                 // Load sidebar history
                 viewModel.RecentSessions = await _chatHistoryService.GetUserSessionsAsync();
                 viewModel.TotalSessions = viewModel.RecentSessions.Count;
@@ -77,7 +77,7 @@ public class HomeController : Controller
     [AllowAnonymous]
     public async Task<IActionResult> Status()
     {
-        try 
+        try
         {
             int count = await _ragService.GetDocumentCountAsync();
             return Content($"Collection contains {count} accessible documents.");

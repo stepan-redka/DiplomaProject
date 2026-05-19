@@ -1,8 +1,8 @@
 @model Diploma.Application.DTOs.SystemHealthDto
 
 <div class="max-w-4xl mx-auto space-y-12 fade-in">
-    <div class="space-y-2">
-        <h2 class="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Infrastructure Telemetry</h2>
+    <div class="space-y-2 mt-5 mb-4">
+        <h2 class="mt-5 mb-4 text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Infrastructure Telemetry</h2>
         <p class="text-sm text-zinc-500">Real-time status of critical RAG ecosystem components.</p>
     </div>
 
@@ -18,7 +18,7 @@
                 </span>
             </div>
             <div class="space-y-1">
-                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">PostgreSQL</h4>
+                <h4 class="mt-5 mb-4 text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">PostgreSQL</h4>
                 <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.Database.LatencyMs ms</p>
             </div>
         </div>
@@ -34,7 +34,7 @@
                 </span>
             </div>
             <div class="space-y-1">
-                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Qdrant</h4>
+                <h4 class="mt-5 mb-4 text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Qdrant</h4>
                 <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.VectorDb.LatencyMs ms</p>
             </div>
         </div>
@@ -50,7 +50,7 @@
                 </span>
             </div>
             <div class="space-y-1">
-                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">AI Provider</h4>
+                <h4 class="mt-5 mb-4 text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">AI Provider</h4>
                 <p class="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Latency: @Model.AiService.LatencyMs ms</p>
             </div>
         </div>
@@ -66,7 +66,7 @@
                 </span>
             </div>
             <div class="space-y-2">
-                <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Host Server</h4>
+                <h4 class="mt-5 mb-4 text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-tight">Host Server</h4>
                 <div class="grid grid-cols-2 gap-2 font-mono text-[9px]">
                     <div class="flex flex-col">
                         <span class="text-zinc-400">CPU</span>

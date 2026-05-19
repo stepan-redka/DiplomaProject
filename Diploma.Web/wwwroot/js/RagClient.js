@@ -4,13 +4,34 @@
  * Encapsulates all network communication.
  */
 export class RagClient {
-    async ask(question, sessionId = null, topK = 3, intent = null, selectedModel = null, isHighFidelity = false) {
+    async ask(question, sessionId = null, topK = 3, intent = null, selectedModel = null, isHighFidelity = false, signal = null) {
         const response = await fetch('/Chat/Ask', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, sessionId, topK, intent, selectedModel, isHighFidelity })
+            body: JSON.stringify({ question, sessionId, topK, intent, selectedModel, isHighFidelity }),
+            signal
         });
         if (!response.ok) throw new Error('Query failed');
+        return await response.json();
+    }
+
+    async createSession(title, selectedDocumentIds) {
+        const response = await fetch('/Chat/CreateSession', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, selectedDocumentIds })
+        });
+        if (!response.ok) throw new Error('Session creation failed');
+        return await response.json();
+    }
+
+    async toggleDocumentBinding(sessionId, documentId) {
+        const response = await fetch('/Chat/ToggleDocumentBinding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, documentId })
+        });
+        if (!response.ok) throw new Error('Failed to toggle document binding.');
         return await response.json();
     }
 

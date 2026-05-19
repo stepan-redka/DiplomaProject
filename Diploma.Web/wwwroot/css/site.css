@@ -66,6 +66,48 @@ body {
     box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 }
 
+/* Document Binding UI */
+.document-item {
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.related-indicator {
+    display: none;
+    pointer-events: none;
+}
+
+.document-item.active-binding {
+    background-color: rgba(99, 102, 241, 0.05) !important;
+    border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+.dark .document-item.active-binding {
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.document-item.active-binding .document-icon {
+    color: var(--indigo-primary);
+}
+
+.document-item.active-binding .binding-checkbox {
+    background-color: var(--indigo-primary);
+    border-color: var(--indigo-primary);
+}
+
+.document-item.active-binding .binding-checkbox i {
+    opacity: 1;
+}
+
+.document-item .document-icon {
+    transition: all 0.2s ease-in-out;
+}
+
+.document-item:hover .bind-hint {
+    opacity: 1;
+}
+
 /* Markdown Table Professionalism */
 .prose table {
     width: 100%;

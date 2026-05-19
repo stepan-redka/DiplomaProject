@@ -15,7 +15,7 @@ public class AccountController : Controller
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
-        UserManager<IdentityUser> userManager, 
+        UserManager<IdentityUser> userManager,
         SignInManager<IdentityUser> signInManager,
         IRagService ragService,
         IChatHistoryService chatHistoryService,
@@ -99,15 +99,15 @@ public class AccountController : Controller
 
     [HttpGet]
     public IActionResult Login() => View();
- // This shows the Login.cshtml form
+    // This shows the Login.cshtml form
 
     [HttpPost]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
         if (ModelState.IsValid)
-        {        
+        {
             var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, isPersistent: false, lockoutOnFailure: false);
-            
+
             if (result.Succeeded)
             {
                 return RedirectToAction("Index", "Home");

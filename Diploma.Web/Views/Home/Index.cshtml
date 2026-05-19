@@ -63,7 +63,7 @@
         <div class="p-8 border-t border-zinc-100/30 dark:border-zinc-900/30">
             <div class="max-w-2xl mx-auto">
                 <div class="relative group bg-zinc-50/50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2 transition-all focus-within:border-zinc-300 dark:focus-within:border-zinc-700 focus-within:bg-white dark:focus-within:bg-zinc-900/60 shadow-xl dark:shadow-2xl">
-                    <div id="loadingIndicator" class="hidden absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm z-10 flex items-center justify-center rounded-2xl">
+                    <div id="loadingIndicator" class="hidden pointer-events-none absolute inset-0 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm z-10 flex items-center justify-center rounded-2xl">
                          <div class="flex flex-col items-center gap-4">
                             <div class="flex gap-1">
                                 <div class="w-1 h-4 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
@@ -78,6 +78,9 @@
                                   class="flex-1 bg-transparent border-none text-zinc-900 dark:text-zinc-100 text-sm px-4 py-3 focus:outline-none focus:ring-0 placeholder:text-zinc-300 dark:placeholder:text-zinc-700 resize-none min-h-[48px]"></textarea>
                         <button id="sendBtn" class="mb-1 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all disabled:opacity-30 shadow-lg shadow-indigo-500/10">
                             <i data-lucide="send-horizontal" class="w-4 h-4"></i>
+                        </button>
+                        <button id="cancelBtn" class="hidden relative z-20 mb-1 p-3 bg-zinc-700 hover:bg-red-600 text-zinc-300 hover:text-white rounded-xl transition-all shadow-lg" title="Cancel query">
+                            <i data-lucide="x-circle" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
@@ -141,6 +144,50 @@
         </div>
     </div>
 </div>
+
+<!-- New Session Modal -->
+<div id="new-session-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-white/80 dark:bg-black/95 backdrop-blur-xl" id="new-session-modal-overlay"></div>
+    <form id="new-session-form" class="relative w-full max-w-lg bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-3xl p-8 space-y-6 shadow-2xl">
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">Start New Research Thread</h2>
+            <button type="button" id="close-new-session-modal" class="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                <i data-lucide="x" class="w-5 h-5 text-zinc-500"></i>
+            </button>
+        </div>
+
+        <div>
+            <label for="session-title" class="text-xs font-bold uppercase text-zinc-500 tracking-widest">Thread Title</label>
+            <input type="text" id="session-title" name="title" placeholder="e.g., 'Analysis of Quantum Effects'" class="w-full mt-2 bg-zinc-100 dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:border-indigo-500 focus:ring-0 transition-all">
+        </div>
+
+        <div>
+            <label class="text-xs font-bold uppercase text-zinc-500 tracking-widest">Bind Documents (Optional)</label>
+            <div id="chat-document-bounds" class="mt-2 max-h-48 overflow-y-auto space-y-2 p-3 bg-zinc-100 dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 rounded-xl custom-scrollbar">
+                @if (Model.Documents != null && Model.Documents.Any())
+                {
+                    @foreach (var doc in Model.Documents)
+                    {
+                        <label class="flex items-center gap-3 p-3 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+                            <input type="checkbox" name="selectedDocumentIds" value="@doc.Id" class="w-5 h-5 rounded text-indigo-600 bg-zinc-300 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 focus:ring-indigo-500">
+                            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">@doc.FileName</span>
+                        </label>
+                    }
+                }
+                else
+                {
+                    <p class="text-sm text-center text-zinc-500 py-4">No documents available in the registry.</p>
+                }
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-4">
+            <button type="button" id="cancel-new-session" class="px-6 py-3 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Cancel</button>
+            <button type="submit" class="px-8 py-3 bg-indigo-600 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20">Start Thread</button>
+        </div>
+    </form>
+</div>
+
 
 @section Scripts {
     <script type="module" src="/js/RagClient.js"></script>

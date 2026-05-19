@@ -31,7 +31,7 @@ public class LabController : Controller
         var storageBytes = await _ragService.GetStorageUsedAsync();
         var queries = await _ragService.GetTotalQueriesAsync();
         var docs = await _ragService.GetDocumentCountAsync();
-        
+
         var health = await _healthService.GetSystemHealthAsync();
         var analytics = await _ragService.GetAnalyticsAsync();
 
@@ -43,14 +43,14 @@ public class LabController : Controller
             StorageUsedFormatted = StorageFormatter.FormatSize(storageBytes),
             TotalQueries = queries,
             TotalDocuments = docs,
-            StorageUsedPercentage = (int)Math.Min(100, (storageBytes / (1024.0 * 1024.0)) / 1024.0 * 100), // Utilization vs 1GB
-            
-            ModelLatency = analytics.ModelLatency.Select(d => new ModelLatencyDto { ModelName = d.ModelName, AverageLatencyMs = d.AvgLatencyMs }).ToList(),
-            IngestionEfficiency = analytics.IngestionEfficiency.Select(d => new IngestionEfficiencyDto { FileSizeBytes = d.FileSizeBytes, ProcessingTimeMs = d.ProcessingTimeMs, FileName = d.FileName }).ToList(),
-            SemanticPrecision = analytics.SemanticPrecision.Select(d => new SemanticPrecisionDto { Timestamp = d.Timestamp, MaxScore = d.Score }).ToList(),
-            GenerationThroughput = analytics.GenerationThroughput.Select(d => new ThroughputDto { ModelName = d.ModelName, TokensPerSec = d.TokensPerSec }).ToList(),
-            MathHumanCorrelation = analytics.MathHumanCorrelation.Select(d => new CorrelationDto { SimilarityScore = d.Score, UserEffectiveness = d.Feedback }).ToList(),
-            KnowledgeDensity = analytics.KnowledgeDensity.Select(d => new KnowledgeDensityDto { DocumentName = d.DocName, ChunkCount = d.Chunks }).ToList()
+            StorageUsedPercentage = (int)Math.Min(100, storageBytes / (1024.0 * 1024.0 * 1024.0) * 100), // Utilization vs 1GB
+
+            ModelLatency = analytics.ModelLatency,
+            IngestionEfficiency = analytics.IngestionEfficiency,
+            RetrievalSimilarity = analytics.RetrievalSimilarity,
+            GenerationThroughput = analytics.GenerationThroughput,
+            KnowledgeDensity = analytics.KnowledgeDensity,
+            StorageFootprint = analytics.StorageFootprint
         };
 
         return PartialView("_Benchmarks", model);

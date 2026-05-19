@@ -1,12 +1,18 @@
 using Diploma.Infrastructure.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- INFRASTRUCTURE MODULAR REGISTRATION ---
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
 
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddHttpClient();
 
 // Enable AJAX support for Antiforgery

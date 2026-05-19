@@ -4,8 +4,9 @@
         <TargetFramework>net8.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-      <UserSecretsId>5228691d-b70d-439f-a815-39c43e3cf5b3</UserSecretsId>
-  </PropertyGroup>
+        <UserSecretsId>5228691d-b70d-439f-a815-39c43e3cf5b3</UserSecretsId>
+        <NoWarn>$(NoWarn);CS9057</NoWarn>
+    </PropertyGroup>
 
     <ItemGroup>
       <Content Update="Data\**" CopyToPublishDirectory="PreserveNewest" />
@@ -14,16 +15,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="8.0.8" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        <PrivateAssets>all</PrivateAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.Extensions.ML" Version="5.0.0" />
       <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
-      <PackageReference Include="Microsoft.ML" Version="5.0.0" />
-      <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.40.1-alpha" />
-      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.8" />
     </ItemGroup>
 
 </Project>
