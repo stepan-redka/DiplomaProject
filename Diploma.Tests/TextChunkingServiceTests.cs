@@ -55,11 +55,11 @@ public class TextChunkingServiceTests
 
         // Assert
         Assert.True(result.Count > 1);
-        
+
         // Verify that some text from the end of chunk 0 exists in chunk 1
         var firstChunk = result[0];
         var secondChunk = result[1];
-        
+
         // Check for shared content (overlap)
         // We look for a subset of the first chunk inside the second
         var endOfFirst = firstChunk.Substring(firstChunk.Length - 5);

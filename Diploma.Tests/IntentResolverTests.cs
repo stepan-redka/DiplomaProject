@@ -53,7 +53,7 @@ public class IntentResolverTests
         // Arrange
         _mockClassifier.Setup(p => p.Predict(It.IsAny<IntentData>()))
             .Returns(new IntentPrediction { PredictedLabel = "RESEARCH", Score = new[] { 0.9f } });
-        
+
         var resolver = new IntentResolver(_mockClassifier.Object, _mockLogger.Object);
 
         // Act
@@ -70,7 +70,7 @@ public class IntentResolverTests
         // Arrange
         _mockClassifier.Setup(p => p.Predict(It.IsAny<IntentData>()))
             .Returns(new IntentPrediction { PredictedLabel = "GENERAL", Score = new[] { 0.8f } });
-        
+
         var resolver = new IntentResolver(_mockClassifier.Object, _mockLogger.Object);
 
         // Act
@@ -86,7 +86,7 @@ public class IntentResolverTests
         // Arrange
         _mockClassifier.Setup(p => p.Predict(It.IsAny<IntentData>()))
             .Throws(new Exception("ML Engine Error"));
-        
+
         var resolver = new IntentResolver(_mockClassifier.Object, _mockLogger.Object);
 
         // Act

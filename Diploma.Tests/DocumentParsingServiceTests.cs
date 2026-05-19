@@ -55,7 +55,7 @@ public class DocumentParsingServiceTests
         // Fallback parser is a real class in your project, but we can mock it here for the interface
         var mockFallback = new Mock<FallbackTextParser>(new Mock<ILogger<FallbackTextParser>>().Object);
         // Note: FallbackTextParser is usually the last resort.
-        
+
         var parsers = new List<IDocumentParser> { mockPdfParser.Object, new FallbackTextParser(new Mock<ILogger<FallbackTextParser>>().Object) };
         var service = new DocumentParsingService(parsers, _mockLogger.Object);
 

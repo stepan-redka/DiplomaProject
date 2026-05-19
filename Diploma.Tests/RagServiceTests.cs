@@ -57,6 +57,9 @@ public class RagServiceTests
         _mockTokenizerService = new Mock<ITokenizerService>();
         _mockSemanticCache = new Mock<ISemanticCacheService>();
         _mockLogger = new Mock<ILogger<RagService>>();
+        _mockSemanticCache
+            .Setup(c => c.GetCachedResponseAsync(It.IsAny<string>(), It.IsAny<List<Guid>?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
 
         _config = new RagConfiguration
         {
@@ -98,7 +101,7 @@ public class RagServiceTests
         _mockUserService.Setup(s => s.UserId).Returns(userId);
         _mockChunker.Setup(c => c.ChunkText(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .Returns(new List<string> { "chunk1" });
-        
+
         _mockAi.Setup(s => s.GetTextEmbeddingsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<float[]> { new float[768] });
 
@@ -110,7 +113,7 @@ public class RagServiceTests
         // Assert
         var doc = await _dbContext.Documents.FirstAsync();
         Assert.Equal(userId, doc.UserId);
-        
+
         _mockVectorDb.Verify(v => v.UpsertChunksAsync(It.IsAny<string>(), It.IsAny<IEnumerable<VectorData>>(), userId, It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -120,12 +123,12 @@ public class RagServiceTests
         // Arrange
         var userId = "user-999";
         _mockUserService.Setup(s => s.UserId).Returns(userId);
-        
+
         _mockDocumentService.Setup(d => d.GetDocumentCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         _mockIntentResolver.Setup(i => i.ResolveAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(QueryIntent.Research);
 
-        _mockRetrievalService.Setup(r => r.GetRelevantContextAsync(It.IsAny<string>(), userId, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+        _mockRetrievalService.Setup(r => r.GetRelevantContextAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<List<Guid>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<SourceCitation>());
 
         _mockAi.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -140,6 +143,57 @@ public class RagServiceTests
 
         // Assert
         _mockIntentResolver.Verify(i => i.ResolveAsync("What is RAG?", false, true, It.IsAny<CancellationToken>()), Times.Once);
-        _mockRetrievalService.Verify(r => r.GetRelevantContextAsync("What is RAG?", userId, 3, It.IsAny<CancellationToken>()), Times.Once);
+        _mockRetrievalService.Verify(r => r.GetRelevantContextAsync("What is RAG?", 3, It.IsAny<List<Guid>>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithSpecificDocumentBounds_AppliesPayloadFilter()
+    {
+        // Arrange
+        var userId = "user-bounded";
+        var sessionId = Guid.NewGuid();
+        var docIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() };
+
+        _mockUserService.Setup(s => s.UserId).Returns(userId);
+
+        var session = new ChatSession
+        {
+            Id = sessionId,
+            UserId = userId,
+            Title = "Bounded Session",
+            RelatedDocumentIds = docIds
+        };
+        _dbContext.ChatSessions.Add(session);
+        await _dbContext.SaveChangesAsync();
+
+        _mockDocumentService.Setup(d => d.GetDocumentCountAsync(It.IsAny<CancellationToken>())).ReturnsAsync(10);
+        _mockIntentResolver.Setup(i => i.ResolveAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(QueryIntent.Research);
+
+        _mockRetrievalService.Setup(r => r.GetRelevantContextAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<List<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SourceCitation>());
+
+        _mockAi.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Bounded Answer");
+
+        _mockPromptRegistry.Setup(p => p.GetGeneralPrompt(It.IsAny<string>())).Returns("Prompt");
+
+        var service = CreateService();
+
+        // Act
+        await service.QueryAsync("Bounded question", sessionId, 3, null, null, false);
+
+        // Assert
+        // Verify that GetRelevantContextAsync was called with the specific docIds from the session
+        _mockRetrievalService.Verify(r => r.GetRelevantContextAsync(
+            "Bounded question",
+            3,
+            docIds,
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        _mockSemanticCache.Verify(c => c.GetCachedResponseAsync(
+            "Bounded question",
+            docIds,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }
