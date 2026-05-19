@@ -18,9 +18,9 @@ public class RetrievalService : IRetrievalService
     private readonly ILogger<RetrievalService> _logger;
 
     public RetrievalService(
-        IVectorDatabase vectorDb, 
+        IVectorDatabase vectorDb,
         IAiService aiService,
-        ApplicationDbContext dbContext, 
+        ApplicationDbContext dbContext,
         RagConfiguration config,
         IEvaluationService evaluationService,
         ILogger<RetrievalService> logger)
@@ -33,12 +33,14 @@ public class RetrievalService : IRetrievalService
         _logger = logger;
     }
 
-    public async Task<List<SourceCitation>> GetRelevantContextAsync(string question, string userId, int? topK = null, CancellationToken ct = default)
+    public async Task<List<SourceCitation>> GetRelevantContextAsync(string question, int? topK = null, List<Guid>? allowedDocumentIds = null, CancellationToken ct = default)
     {
         var questionEmbedding = await _aiService.GetTextEmbeddingAsync(question, ct);
         var k = topK ?? _config.Qdrant.DefaultTopK;
-        var searchResults = await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, questionEmbedding, userId, k, ct);
-        
+
+        // Passing the optional document filter to the vector store using the updated signature
+        var searchResults = await _vectorDb.SearchAsync(_config.Qdrant.CollectionName, new ReadOnlyMemory<float>(questionEmbedding), k, allowedDocumentIds, ct);
+
         var validResults = searchResults.Where(r => r.Score >= _config.Qdrant.SimilarityThreshold).ToList();
 
         if (!validResults.Any()) return new List<SourceCitation>();
@@ -48,11 +50,25 @@ public class RetrievalService : IRetrievalService
             .Where(d => docIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, d => d.FileName, ct);
 
-        return validResults.Select(r => new SourceCitation 
-        { 
-            Content = r.Content, 
+        return validResults.Select(r => new SourceCitation
+        {
+            Content = r.Content,
             SourceDocument = docNames.GetValueOrDefault(r.DocumentId, "Unknown Source"),
-            Score = _evaluationService.NormalizeScore(r.Score, _config.Qdrant.SimilarityThreshold) 
+            Score = _evaluationService.NormalizeScore(r.Score, _config.Qdrant.SimilarityThreshold),
+            DocumentId = r.DocumentId,
+            ChunkId = r.ChunkId,
+            ChunkIndex = TryGetChunkIndex(r.Metadata)
         }).ToList();
+    }
+
+    private static int TryGetChunkIndex(Dictionary<string, object> metadata)
+    {
+        if (metadata.TryGetValue("chunk_index", out var value) &&
+            int.TryParse(value?.ToString()?.Trim('"'), out var chunkIndex))
+        {
+            return chunkIndex;
+        }
+
+        return -1;
     }
 }

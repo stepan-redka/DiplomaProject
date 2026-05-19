@@ -11,7 +11,7 @@ public class CurrentUserService : ICurrentUserService
     private string? _cachedUserId;
     private bool? _cachedIsAdmin;
 
-    public string? UserId 
+    public string? UserId
     {
         get
         {
@@ -36,13 +36,13 @@ public class CurrentUserService : ICurrentUserService
                 guestId = "guest_" + Guid.NewGuid().ToString();
                 try
                 {
-                    httpContext.Response.Cookies.Append("GuestUserId", guestId, new CookieOptions 
-                    { 
-                        HttpOnly = true, 
-                        Secure = true, 
+                    httpContext.Response.Cookies.Append("GuestUserId", guestId, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = true,
                         SameSite = SameSiteMode.Strict,
                         Expires = DateTimeOffset.UtcNow.AddDays(30),
-                        IsEssential = true 
+                        IsEssential = true
                     });
                 }
                 catch { /* Response started */ }
@@ -54,8 +54,8 @@ public class CurrentUserService : ICurrentUserService
     }
 
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
-    
-    public bool IsAdmin 
+
+    public bool IsAdmin
     {
         get
         {

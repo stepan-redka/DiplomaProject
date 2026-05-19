@@ -20,7 +20,7 @@ public class AiService : IAiService
     public static readonly string[] SupportedModels = { "llama3.1", "qwen2.5:7b", "phi3.5" };
 
     public AiService(
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, 
+        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
         IChatCompletionService chatService,
         RagConfiguration config,
         ILogger<AiService> logger,
@@ -52,7 +52,7 @@ public class AiService : IAiService
             var generatedEmbeddings = await _embeddingGenerator.GenerateAsync(textList, cancellationToken: ct);
             sw.Stop();
 
-            _logger.LogDebug("Generated {Count} embeddings in {ElapsedMs}ms", 
+            _logger.LogDebug("Generated {Count} embeddings in {ElapsedMs}ms",
                 generatedEmbeddings.Count, sw.ElapsedMilliseconds);
 
             return generatedEmbeddings.Select(e => e.Vector.ToArray()).ToList();
@@ -74,14 +74,14 @@ public class AiService : IAiService
         // Proactive availability check
         if (!await IsModelAvailableAsync(effectiveModel, ct))
         {
-            _logger.LogWarning("Model {ModelName} is not available in Ollama. Falling back to default: {DefaultModel}", 
+            _logger.LogWarning("Model {ModelName} is not available in Ollama. Falling back to default: {DefaultModel}",
                 effectiveModel, _config.Ollama.ChatModel);
             effectiveModel = _config.Ollama.ChatModel;
         }
 
-        _logger.LogInformation("Generating AI answer using model: {ModelName} (Prompt length: {Length})", 
+        _logger.LogInformation("Generating AI answer using model: {ModelName} (Prompt length: {Length})",
             effectiveModel, prompt.Length);
-            
+
         var sw = Stopwatch.StartNew();
         try
         {
@@ -92,17 +92,17 @@ public class AiService : IAiService
 
             var result = await _chatService.GetChatMessageContentAsync(prompt, executionSettings, cancellationToken: ct);
             sw.Stop();
-            
+
             var content = result.Content ?? "I'm sorry, I couldn't generate an answer.";
-            _logger.LogInformation("Successfully generated answer in {ElapsedMs}ms. Answer length: {AnswerLength}", 
+            _logger.LogInformation("Successfully generated answer in {ElapsedMs}ms. Answer length: {AnswerLength}",
                 sw.ElapsedMilliseconds, content.Length);
-            
+
             return content;
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to generate AI answer after {ElapsedMs}ms using model {Model}", 
+            _logger.LogError(ex, "Failed to generate AI answer after {ElapsedMs}ms using model {Model}",
                 sw.ElapsedMilliseconds, effectiveModel);
             throw;
         }
@@ -115,18 +115,18 @@ public class AiService : IAiService
             var endpoint = _config.Ollama.Endpoint.TrimEnd('/');
             var response = await _httpClient.GetFromJsonAsync<OllamaTagsResponse>(
                 $"{endpoint}/api/tags", ct);
-            
+
             if (response?.Models == null) return false;
 
             // Ollama often uses 'model:latest' format, handle both exact and base match
-            return response.Models.Any(m => 
-                m.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase) || 
+            return response.Models.Any(m =>
+                m.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase) ||
                 m.Name.Equals($"{modelName}:latest", StringComparison.OrdinalIgnoreCase) ||
                 m.Name.StartsWith(modelName + ":", StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to check model availability for {ModelName} at {_Endpoint}", 
+            _logger.LogWarning(ex, "Failed to check model availability for {ModelName} at {_Endpoint}",
                 modelName, _config.Ollama.Endpoint);
             return false;
         }

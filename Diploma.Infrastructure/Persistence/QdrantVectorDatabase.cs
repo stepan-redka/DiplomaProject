@@ -1,5 +1,6 @@
 using Diploma.Application.DTOs;
 using Diploma.Application.Interfaces.Storage;
+using Diploma.Application.Interfaces.Identity;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using Microsoft.Extensions.Logging;
@@ -11,11 +12,19 @@ namespace Diploma.Infrastructure.Persistence;
 public class QdrantVectorDatabase : IVectorDatabase
 {
     private readonly QdrantClient _client;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly RagConfiguration _config;
     private readonly ILogger<QdrantVectorDatabase> _logger;
 
-    public QdrantVectorDatabase(QdrantClient client, ILogger<QdrantVectorDatabase> logger)
+    public QdrantVectorDatabase(
+        QdrantClient client,
+        ICurrentUserService currentUserService,
+        RagConfiguration config,
+        ILogger<QdrantVectorDatabase> logger)
     {
         _client = client;
+        _currentUserService = currentUserService;
+        _config = config;
         _logger = logger;
     }
 
@@ -29,7 +38,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         }
 
         _logger.LogInformation("Creating Qdrant collection: {CollectionName} with size {VectorSize}", collectionName, vectorSize);
-        
+
         try
         {
             await _client.CreateCollectionAsync(collectionName, new VectorParams
@@ -40,6 +49,9 @@ public class QdrantVectorDatabase : IVectorDatabase
 
             // PERFORMANCE OPTIMIZATION: Create index on user_id for multi-tenant isolation performance
             await CreatePayloadIndexAsync(collectionName, "user_id", ct);
+
+            // PERFORMANCE OPTIMIZATION: Create index on document_id for scoped research performance
+            await CreatePayloadIndexAsync(collectionName, "document_id", ct);
 
             sw.Stop();
             _logger.LogInformation("Collection {CollectionName} created successfully with indexes in {ElapsedMs}ms.", collectionName, sw.ElapsedMilliseconds);
@@ -70,7 +82,7 @@ public class QdrantVectorDatabase : IVectorDatabase
     public async Task UpsertChunksAsync(string collectionName, IEnumerable<VectorData> data, string userId, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        var allPoints = data.Select(d => 
+        var allPoints = data.Select(d =>
         {
             var point = new PointStruct
             {
@@ -105,59 +117,99 @@ public class QdrantVectorDatabase : IVectorDatabase
                 var batch = allPoints.Skip(i).Take(batchSize).ToList();
                 await _client.UpsertAsync(collectionName, batch, cancellationToken: ct);
                 totalUpserted += batch.Count;
-                _logger.LogDebug("Upserted batch of {BatchCount} points. Total: {TotalUpserted}/{AllCount}", 
+                _logger.LogDebug("Upserted batch of {BatchCount} points. Total: {TotalUpserted}/{AllCount}",
                     batch.Count, totalUpserted, allPoints.Count);
             }
 
             sw.Stop();
-            _logger.LogInformation("Successfully upserted {Count} points for user {UserId} into {Collection} in {ElapsedMs}ms", 
+            _logger.LogInformation("Successfully upserted {Count} points for user {UserId} into {Collection} in {ElapsedMs}ms",
                 allPoints.Count, userId, collectionName, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to upsert points into {Collection} for user {UserId} after {ElapsedMs}ms", 
+            _logger.LogError(ex, "Failed to upsert points into {Collection} for user {UserId} after {ElapsedMs}ms",
                 collectionName, userId, sw.ElapsedMilliseconds);
             throw;
         }
     }
 
-    public async Task<IEnumerable<ScoredChunkDto>> SearchAsync(string collectionName, float[] embedding, string userId, int limit = 5, CancellationToken ct = default)
+    public async Task<List<DocumentChunkDto>> SearchAsync(
+        string collectionName,
+        ReadOnlyMemory<float> vector,
+        int limit,
+        List<Guid>? allowedDocumentIds,
+        CancellationToken ct,
+        IReadOnlyDictionary<string, string>? requiredPayloadMatches = null)
     {
         var sw = Stopwatch.StartNew();
+        var userId = _currentUserService.UserId ?? "system";
+
         // STRICT isolation: Filter by user_id
         var filter = new Filter
         {
             Must = { Conditions.MatchKeyword("user_id", userId) }
         };
 
+        // Task 2: SCOPED isolation: Filter by specific document IDs if provided
+        if (allowedDocumentIds != null && allowedDocumentIds.Any())
+        {
+            var docIdStrings = allowedDocumentIds.Select(id => id.ToString()).ToList();
+
+            // Constructing a strict MatchAny condition for document_id using Keywords for multiple strings
+            var docIdMatch = new Match { Keywords = new RepeatedStrings() };
+            foreach (var id in docIdStrings)
+            {
+                docIdMatch.Keywords.Strings.Add(id);
+            }
+
+            filter.Must.Add(new Condition
+            {
+                Field = new FieldCondition
+                {
+                    Key = "document_id",
+                    Match = docIdMatch
+                }
+            });
+
+            _logger.LogDebug("Qdrant search scoped to {DocCount} documents.", allowedDocumentIds.Count);
+        }
+
+        if (requiredPayloadMatches != null)
+        {
+            foreach (var match in requiredPayloadMatches)
+            {
+                filter.Must.Add(Conditions.MatchKeyword(match.Key, match.Value));
+            }
+        }
+
         try
         {
             var results = await _client.SearchAsync(
                 collectionName,
-                embedding,
+                vector,
                 filter: filter,
                 limit: (ulong)limit,
                 cancellationToken: ct
             );
 
             sw.Stop();
-            _logger.LogDebug("Qdrant search for user {UserId} returned {Count} results in {ElapsedMs}ms", 
+            _logger.LogDebug("Qdrant search for user {UserId} returned {Count} results in {ElapsedMs}ms",
                 userId, results.Count, sw.ElapsedMilliseconds);
 
-            return results.Select(r => new ScoredChunkDto
+            return results.Select(r => new DocumentChunkDto
             {
                 ChunkId = Guid.Parse(r.Id.Uuid),
                 DocumentId = Guid.TryParse(r.Payload["document_id"].StringValue, out var docId) ? docId : Guid.Empty,
                 Content = r.Payload["content"].StringValue,
                 Score = r.Score,
                 Metadata = r.Payload.ToDictionary(p => p.Key, p => (object)p.Value.ToString())
-            });
+            }).ToList();
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
         {
             _logger.LogWarning("Qdrant collection {Collection} not found. Returning empty results.", collectionName);
-            return Enumerable.Empty<ScoredChunkDto>();
+            return new List<DocumentChunkDto>();
         }
         catch (Exception ex)
         {
@@ -172,8 +224,8 @@ public class QdrantVectorDatabase : IVectorDatabase
         var sw = Stopwatch.StartNew();
         var filter = new Filter
         {
-            Must = 
-            { 
+            Must =
+            {
                 Conditions.MatchKeyword("user_id", userId),
                 Conditions.MatchKeyword("document_id", documentId.ToString())
             }
@@ -183,7 +235,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         {
             await _client.DeleteAsync(collectionName, filter, cancellationToken: ct);
             sw.Stop();
-            _logger.LogInformation("Deleted vectors for document {DocumentId} and user {UserId} in {ElapsedMs}ms", 
+            _logger.LogInformation("Deleted vectors for document {DocumentId} and user {UserId} in {ElapsedMs}ms",
                 documentId, userId, sw.ElapsedMilliseconds);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
@@ -193,7 +245,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to delete vectors for document {DocumentId} and user {UserId} after {ElapsedMs}ms", 
+            _logger.LogError(ex, "Failed to delete vectors for document {DocumentId} and user {UserId} after {ElapsedMs}ms",
                 documentId, userId, sw.ElapsedMilliseconds);
             throw;
         }
@@ -211,7 +263,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         {
             await _client.DeleteAsync(collectionName, filter, cancellationToken: ct);
             sw.Stop();
-            _logger.LogInformation("Deleted all vectors for user {UserId} in {ElapsedMs}ms", 
+            _logger.LogInformation("Deleted all vectors for user {UserId} in {ElapsedMs}ms",
                 userId, sw.ElapsedMilliseconds);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
@@ -221,7 +273,7 @@ public class QdrantVectorDatabase : IVectorDatabase
         catch (Exception ex)
         {
             sw.Stop();
-            _logger.LogError(ex, "Failed to delete vectors for user {UserId} after {ElapsedMs}ms", 
+            _logger.LogError(ex, "Failed to delete vectors for user {UserId} after {ElapsedMs}ms",
                 userId, sw.ElapsedMilliseconds);
             throw;
         }

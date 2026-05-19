@@ -18,7 +18,7 @@ public class EvaluationService : IEvaluationService
     {
         // Vector similarity scores (Cosine) often cluster. 
         // We transform them into a "confidence" percentage that feels natural to users.
-        
+
         if (rawScore >= 0.95f) return 1.0;
         if (rawScore <= 0.0f) return 0.0;
 

@@ -29,22 +29,22 @@ public class HealthService : IHealthService
     public async Task<SystemHealthDto> GetSystemHealthAsync(CancellationToken ct = default)
     {
         var health = new SystemHealthDto();
-        
+
         // 1. Database Health (PostgreSQL)
-        health.Database = await CheckService("PostgreSQL", async (token) => 
+        health.Database = await CheckService("PostgreSQL", async (token) =>
         {
             return await _dbContext.Database.CanConnectAsync(token);
         }, 3000, ct);
 
         // 2. Vector DB Health (Qdrant)
-        health.VectorDb = await CheckService("Qdrant", async (token) => 
+        health.VectorDb = await CheckService("Qdrant", async (token) =>
         {
             var collections = await _qdrantClient.ListCollectionsAsync(token);
             return collections != null;
         }, 3000, ct);
 
         // 3. AI Service Health (Ollama)
-        health.AiService = await CheckService("AI Provider", async (token) => 
+        health.AiService = await CheckService("AI Provider", async (token) =>
         {
             var test = await _aiService.GetTextEmbeddingAsync("health check", token);
             return test != null && test.Length > 0;
@@ -59,7 +59,7 @@ public class HealthService : IHealthService
     private async Task<HostStatus> GetHostStatusAsync()
     {
         var status = new HostStatus { DiskIoStatus = "Nominal" };
-        
+
         try
         {
             // RAM Telemetry via /proc/meminfo
@@ -67,7 +67,7 @@ public class HealthService : IHealthService
             {
                 var memInfo = await File.ReadAllLinesAsync($"{ProcPath}/meminfo");
                 double totalKb = 0, availKb = 0;
-                
+
                 foreach (var line in memInfo)
                 {
                     if (line.StartsWith("MemTotal:")) totalKb = ParseKb(line);
@@ -153,7 +153,7 @@ public class HealthService : IHealthService
     {
         var status = new ServiceStatus { ServiceName = name };
         var sw = Stopwatch.StartNew();
-        
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeoutMs);
 
