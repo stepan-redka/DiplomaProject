@@ -69,6 +69,12 @@ public class RetrievalService : IRetrievalService
             return chunkIndex;
         }
 
+        if (metadata.TryGetValue("index", out var legacyValue) &&
+            int.TryParse(legacyValue?.ToString()?.Trim('"'), out var legacyChunkIndex))
+        {
+            return legacyChunkIndex;
+        }
+
         return -1;
     }
 }

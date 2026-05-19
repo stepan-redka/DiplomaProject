@@ -199,11 +199,20 @@ public class QdrantVectorDatabase : IVectorDatabase
 
             return results.Select(r => new DocumentChunkDto
             {
-                ChunkId = Guid.Parse(r.Id.Uuid),
-                DocumentId = Guid.TryParse(r.Payload["document_id"].StringValue, out var docId) ? docId : Guid.Empty,
-                Content = r.Payload["content"].StringValue,
+                ChunkId = Guid.TryParse(r.Id.Uuid, out var cid) ? cid : Guid.Empty,
+                DocumentId = r.Payload.TryGetValue("document_id", out var docVal) && Guid.TryParse(docVal.StringValue, out var docId) ? docId : Guid.Empty,
+                Content = r.Payload.TryGetValue("content", out var contentVal) ? contentVal.StringValue : string.Empty,
                 Score = r.Score,
-                Metadata = r.Payload.ToDictionary(p => p.Key, p => (object)p.Value.ToString())
+                Metadata = r.Payload.ToDictionary(
+                    p => p.Key, 
+                    p => p.Value.KindCase switch 
+                    {
+                        Value.KindOneofCase.StringValue => (object)p.Value.StringValue,
+                        Value.KindOneofCase.IntegerValue => (object)p.Value.IntegerValue,
+                        Value.KindOneofCase.DoubleValue => (object)p.Value.DoubleValue,
+                        Value.KindOneofCase.BoolValue => (object)p.Value.BoolValue,
+                        _ => (object)p.Value.ToString()
+                    })
             }).ToList();
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
