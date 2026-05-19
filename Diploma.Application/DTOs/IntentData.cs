@@ -1,5 +1,3 @@
-using Microsoft.ML.Data;
-
 namespace Diploma.Application.DTOs;
 
 /// <summary>
@@ -7,9 +5,7 @@ namespace Diploma.Application.DTOs;
 /// </summary>
 public class IntentData
 {
-    [LoadColumn(0)]
     public string Text { get; set; } = string.Empty;
 
-    [LoadColumn(1)]
     public string Label { get; set; } = string.Empty;
 }

@@ -20,9 +20,15 @@ public interface IVectorDatabase
     Task UpsertChunksAsync(string collectionName, IEnumerable<VectorData> data, string userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Searches for similar text chunks, strictly filtered by the userId to ensure isolation.
+    /// Searches for similar text chunks, strictly filtered by the active user's ID and optionally by specific document IDs.
     /// </summary>
-    Task<IEnumerable<ScoredChunkDto>> SearchAsync(string collectionName, float[] embedding, string userId, int limit = 5, CancellationToken ct = default);
+    Task<List<DocumentChunkDto>> SearchAsync(
+        string collectionName,
+        ReadOnlyMemory<float> vector,
+        int limit,
+        List<Guid>? allowedDocumentIds,
+        CancellationToken ct,
+        IReadOnlyDictionary<string, string>? requiredPayloadMatches = null);
 
     /// <summary>
     /// Deletes all vectors associated with a specific document for a user.

@@ -9,22 +9,22 @@ namespace Diploma.Domain.Entities;
 public class ChatMessage : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     /// <summary>
     /// Foreign key for multi-tenancy isolation
     /// </summary>
     public string UserId { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Foreign key to parent session
     /// </summary>
     public Guid ChatSessionId { get; set; }
     public ChatSession Session { get; set; } = null!;
-    
+
     public string Role { get; set; } = "user"; // "user" or "assistant"
     public string Content { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     /// <summary>
     /// User feedback on AI response quality
     /// </summary>

@@ -16,7 +16,7 @@ public interface IRagService
     Task<bool> DeleteDocumentAsync(Guid documentId, CancellationToken ct = default);
     Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500, CancellationToken ct = default);
     Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds, CancellationToken ct = default);
-    
+
     // Chat History & Feedback
     Task<List<ChatMessageDto>> GetChatHistoryAsync(int limit = 50, CancellationToken ct = default);
     Task<bool> SetFeedbackAsync(Guid messageId, int effectiveness, CancellationToken ct = default);

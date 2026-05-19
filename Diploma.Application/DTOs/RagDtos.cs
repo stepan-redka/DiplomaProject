@@ -43,6 +43,9 @@ public class SourceCitation
     public string Content { get; set; } = string.Empty;
     public string SourceDocument { get; set; } = string.Empty;
     public double Score { get; set; }
+    public Guid DocumentId { get; set; }
+    public Guid ChunkId { get; set; }
+    public int ChunkIndex { get; set; }
 }
 
 /// <summary>
@@ -83,7 +86,7 @@ public class StoredChunkInfo
     public int ChunkIndex { get; set; }
 }
 
-public class ScoredChunkDto
+public class DocumentChunkDto
 {
     public Guid ChunkId { get; set; }
     public Guid DocumentId { get; set; }
@@ -132,17 +135,16 @@ public class ChatMessageDto
 
 public class ResearchAnalyticsDto
 {
-    public List<ModelLatencyData> ModelLatency { get; set; } = new();
-    public List<IngestionData> IngestionEfficiency { get; set; } = new();
-    public List<PrecisionData> SemanticPrecision { get; set; } = new();
-    public List<ThroughputData> GenerationThroughput { get; set; } = new();
-    public List<CorrelationData> MathHumanCorrelation { get; set; } = new();
-    public List<DensityData> KnowledgeDensity { get; set; } = new();
+    public List<ChartDataPoint> ModelLatency { get; set; } = new();
+    public List<ChartDataPoint> IngestionEfficiency { get; set; } = new();
+    public List<ChartDataPoint> RetrievalSimilarity { get; set; } = new();
+    public List<ChartDataPoint> GenerationThroughput { get; set; } = new();
+    public List<ChartDataPoint> KnowledgeDensity { get; set; } = new();
+    public List<ChartDataPoint> StorageFootprint { get; set; } = new();
 }
 
-public class ModelLatencyData { public string ModelName { get; set; } = ""; public double AvgLatencyMs { get; set; } }
-public class IngestionData { public long FileSizeBytes { get; set; } public double ProcessingTimeMs { get; set; } public string FileName { get; set; } = ""; }
-public class PrecisionData { public DateTime Timestamp { get; set; } public double Score { get; set; } }
-public class ThroughputData { public string ModelName { get; set; } = ""; public double TokensPerSec { get; set; } }
-public class CorrelationData { public double Score { get; set; } public int Feedback { get; set; } }
-public class DensityData { public string DocName { get; set; } = ""; public int Chunks { get; set; } }
+public class ChartDataPoint
+{
+    public string Label { get; set; } = string.Empty;
+    public double Value { get; set; }
+}

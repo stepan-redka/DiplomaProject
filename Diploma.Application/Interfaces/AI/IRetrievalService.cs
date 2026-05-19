@@ -4,5 +4,9 @@ namespace Diploma.Application.Interfaces.AI;
 
 public interface IRetrievalService
 {
-    Task<List<SourceCitation>> GetRelevantContextAsync(string question, string userId, int? topK = null, CancellationToken ct = default);
+    /// <summary>
+    /// Retrieves relevant document chunks based on semantic similarity.
+    /// Automatically applies user isolation and optional document pre-filtering.
+    /// </summary>
+    Task<List<SourceCitation>> GetRelevantContextAsync(string question, int? topK = null, List<Guid>? allowedDocumentIds = null, CancellationToken ct = default);
 }

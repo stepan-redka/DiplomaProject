@@ -31,4 +31,9 @@ public interface IChatHistoryService
     /// Updates the title of an existing session.
     /// </summary>
     Task<bool> UpdateSessionTitleAsync(Guid sessionId, string newTitle, CancellationToken ct = default);
+
+    /// <summary>
+    /// Toggles the binding of a document to a session and returns the new binding state.
+    /// </summary>
+    Task<bool> ToggleDocumentBindingAsync(Guid sessionId, Guid documentId, CancellationToken ct = default);
 }

@@ -1,5 +1,3 @@
-using Microsoft.ML.Data;
-
 namespace Diploma.Application.DTOs;
 
 /// <summary>
@@ -7,7 +5,6 @@ namespace Diploma.Application.DTOs;
 /// </summary>
 public class IntentPrediction
 {
-    [ColumnName("PredictedLabel")]
     public string PredictedLabel { get; set; } = string.Empty;
 
     public float[] Score { get; set; } = [];

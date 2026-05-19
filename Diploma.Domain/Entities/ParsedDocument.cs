@@ -1,5 +1,6 @@
 using Diploma.Domain.Enums;
 using Diploma.Domain.Interfaces;
+
 namespace Diploma.Domain.Entities;
 
 /// <summary>
@@ -8,7 +9,7 @@ namespace Diploma.Domain.Entities;
 public class ParsedDocument : IMultiTenant
 {
     public bool Success { get; set; }
-    public string? UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
     public DocumentType Type { get; set; }

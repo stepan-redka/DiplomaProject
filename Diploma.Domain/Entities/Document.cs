@@ -9,16 +9,16 @@ namespace Diploma.Domain.Entities;
 public class Document : IMultiTenant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     /// <summary>
     /// Foreign key to Identity User
     /// </summary>
     public string UserId { get; set; } = string.Empty;
-    
+
     public string FileName { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DocumentType Type { get; set; }
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
@@ -40,7 +40,7 @@ public class Document : IMultiTenant
     /// Actual file size in bytes.
     /// </summary>
     public long FileSizeBytes { get; set; }
-    
+
     /// <summary>
     /// Navigation property to chunks
     /// </summary>
